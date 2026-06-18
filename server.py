@@ -7,6 +7,7 @@ import urllib.parse
 
 import unabated_adapter
 import merkur_adapter
+import superbet_adapter
 from unabated_adapter import build_highlights
 
 
@@ -40,7 +41,14 @@ def load_all_props():
     except Exception as exc:
         print(f"[merkur] fetch failed — {exc}")
 
-    all_records = unabated_records + merkur_records
+    # --- Superbet RS (multi-league, single book) ---
+    superbet_records = []
+    try:
+        superbet_records = superbet_adapter.load_superbet_props()
+    except Exception as exc:
+        print(f"[superbet] fetch failed — {exc}")
+
+    all_records = unabated_records + merkur_records + superbet_records
 
     # All distinct leagues present in the merged dataset
     all_leagues = sorted({r.league for r in all_records})
@@ -57,6 +65,7 @@ def load_all_props():
         "sources": {
             "unabated": unabated_adapter.UNABATED_WNBA_PROPS_URL,
             "merkur":   merkur_adapter.MERKUR_SK_URL,
+            "superbet": superbet_adapter.EVENTS_BY_DATE_URL,
         },
     }
 
