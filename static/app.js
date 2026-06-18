@@ -1,0 +1,298 @@
+const state = {
+  records: [],
+  highlights: {},
+  books: [],
+  leagues: [],
+};
+
+const leagueFilter = document.querySelector("#leagueFilter");
+const matchFilter = document.querySelector("#matchFilter");
+const playerFilter = document.querySelector("#playerFilter");
+const marketFilter = document.querySelector("#marketFilter");
+const bookFilter = document.querySelector("#bookFilter");
+const selectAllBooks = document.querySelector("#selectAllBooks");
+const clearBooks = document.querySelector("#clearBooks");
+const searchFilter = document.querySelector("#searchFilter");
+const propsHead = document.querySelector("#propsHead");
+const propsBody = document.querySelector("#propsBody");
+const statusEl = document.querySelector("#status");
+
+function recordKey(record) {
+  return `${record.player}|${record.market}|${record.bookmaker}|${record.line}`;
+}
+
+function groupKey(record) {
+  return `${record.player}|${record.market}`;
+}
+
+function titleCase(value) {
+  return value.replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function formatOdds(value) {
+  return value === null || value === undefined ? "-" : Number(value).toFixed(2);
+}
+
+function uniqueSorted(values) {
+  return [...new Set(values)].sort((a, b) => a.localeCompare(b));
+}
+
+function clearSelect(selectEl, firstLabel) {
+  selectEl.replaceChildren();
+  const option = document.createElement("option");
+  option.value = "all";
+  option.textContent = firstLabel;
+  selectEl.appendChild(option);
+}
+
+function addOptions(selectEl, values) {
+  for (const value of values) {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = value;
+    selectEl.appendChild(option);
+  }
+}
+
+function priceClass(record, side) {
+  const highlight = state.highlights[groupKey(record)];
+  if (!highlight) return "";
+
+  if (side === "over" && highlight.best_over === recordKey(record)) {
+    return "best-over";
+  }
+
+  if (side === "under" && highlight.best_under === recordKey(record)) {
+    return "best-under";
+  }
+
+  return "";
+}
+
+function renderLeagues(leagues) {
+  leagueFilter.replaceChildren();
+  for (const league of leagues) {
+    const option = document.createElement("option");
+    option.value = league;
+    option.textContent = league;
+    leagueFilter.appendChild(option);
+  }
+  // Default to WNBA if available, else first league
+  const defaultLeague = leagues.includes("WNBA") ? "WNBA" : leagues[0];
+  if (defaultLeague) leagueFilter.value = defaultLeague;
+}
+
+function renderMarkets(markets) {
+  clearSelect(marketFilter, "All markets");
+  for (const market of markets) {
+    const option = document.createElement("option");
+    option.value = market;
+    // Pretty-print market names: "three_pointers" → "Three Pointers"
+    option.textContent = titleCase(market.replace(/_/g, " "));
+    marketFilter.appendChild(option);
+  }
+}
+
+function renderSelectors() {
+  const currentLeague = leagueFilter.value;
+  const leagueRecords = state.records.filter((r) => r.league === currentLeague);
+
+  clearSelect(matchFilter, "All matches");
+  clearSelect(playerFilter, "All players");
+  addOptions(matchFilter, uniqueSorted(leagueRecords.map((r) => r.game)));
+  addOptions(playerFilter, uniqueSorted(leagueRecords.map((r) => r.player)));
+}
+
+function selectedBooks() {
+  return [...bookFilter.querySelectorAll("input[type='checkbox']:checked")].map(
+    (input) => input.value
+  );
+}
+
+function renderBookFilters() {
+  const currentLeague = leagueFilter.value;
+  // Only show books that have records for the current league
+  const leagueBooks = uniqueSorted(
+    state.records
+      .filter((r) => r.league === currentLeague)
+      .map((r) => r.bookmaker)
+  );
+
+  bookFilter.replaceChildren();
+  for (const book of leagueBooks) {
+    const label = document.createElement("label");
+    label.className = "check-row";
+    label.innerHTML = `
+      <input type="checkbox" value="${book}" checked>
+      <span>${book}</span>
+    `;
+    bookFilter.appendChild(label);
+  }
+}
+
+function filteredRecords() {
+  const selectedLeague = leagueFilter.value;
+  const selectedMatch = matchFilter.value;
+  const selectedPlayer = playerFilter.value;
+  const selectedMarket = marketFilter.value;
+  const activeBooks = selectedBooks();
+  const query = searchFilter.value.trim().toLowerCase();
+
+  return state.records.filter((record) => {
+    const leagueMatch = record.league === selectedLeague;
+    const matchMatch = selectedMatch === "all" || record.game === selectedMatch;
+    const playerMatch = selectedPlayer === "all" || record.player === selectedPlayer;
+    const marketMatch = selectedMarket === "all" || record.market === selectedMarket;
+    const bookMatch = activeBooks.includes(record.bookmaker);
+    const haystack = `${record.player} ${record.team} ${record.game} ${record.bookmaker}`.toLowerCase();
+    return leagueMatch && matchMatch && playerMatch && marketMatch && bookMatch && haystack.includes(query);
+  });
+}
+
+function comparisonKey(record) {
+  // Intentionally excludes game: different sources format game strings differently
+  // (Unabated: "Away @ Home", Merkur: "Home team only"). Using player+market
+  // as the key ensures they land in the same comparison row.
+  return `${record.player}|${record.market}`;
+}
+
+function buildComparisonRows(records) {
+  const rows = new Map();
+  for (const record of records) {
+    const key = comparisonKey(record);
+    if (!rows.has(key)) {
+      rows.set(key, {
+        game: record.game,
+        team: record.team,
+        player: record.player,
+        market: record.market,
+        books: {},
+      });
+    }
+    const row = rows.get(key);
+    // Prefer the more descriptive game string (Unabated has full "Away @ Home")
+    if (record.game && record.game.length > row.game.length) row.game = record.game;
+    // Prefer non-empty team abbreviation (Merkur doesn't carry player team)
+    if (!row.team && record.team) row.team = record.team;
+    row.books[record.bookmaker] = record;
+  }
+
+  return [...rows.values()].sort((a, b) => {
+    const playerSort = a.player.localeCompare(b.player);
+    if (playerSort !== 0) return playerSort;
+    return a.market.localeCompare(b.market);
+  });
+}
+
+function renderHead() {
+  const activeBooks = selectedBooks();
+
+  const bookHeaders = activeBooks
+    .map((book) => `<th colspan="3" class="book-head">${book}</th>`)
+    .join("");
+
+  const bookSubheads = activeBooks
+    .map(() => "<th>Line</th><th>Over</th><th>Under</th>")
+    .join("");
+
+  propsHead.innerHTML = `
+    <tr>
+      <th rowspan="2" class="sticky-main">Player</th>
+      <th rowspan="2">Market</th>
+      ${bookHeaders}
+    </tr>
+    <tr>
+      ${bookSubheads}
+    </tr>
+  `;
+}
+
+function renderBookCells(row) {
+  const activeBooks = selectedBooks();
+
+  return activeBooks
+    .map((book) => {
+      const record = row.books[book];
+      if (!record) {
+        return '<td class="empty">-</td><td class="empty">-</td><td class="empty">-</td>';
+      }
+
+      return `
+        <td>${record.line.toFixed(1)}</td>
+        <td><span class="price ${priceClass(record, "over")}">${formatOdds(record.over_odds_decimal)}</span></td>
+        <td><span class="price ${priceClass(record, "under")}">${formatOdds(record.under_odds_decimal)}</span></td>
+      `;
+    })
+    .join("");
+}
+
+function renderRows() {
+  const rows = buildComparisonRows(filteredRecords());
+
+  renderHead();
+  propsBody.replaceChildren();
+
+  for (const row of rows) {
+    const tableRow = document.createElement("tr");
+    tableRow.innerHTML = `
+      <td class="sticky-main">
+        <strong>${row.player}</strong>
+        ${row.team ? `<div class="muted">${row.team}</div>` : ""}
+        <div class="game-name">vs ${row.game}</div>
+      </td>
+      <td>${titleCase(row.market.replace(/_/g, " "))}</td>
+      ${renderBookCells(row)}
+    `;
+    propsBody.appendChild(tableRow);
+  }
+
+  const league = leagueFilter.value;
+  statusEl.textContent = `${rows.length} comparisons · ${league}`;
+}
+
+function onLeagueChange() {
+  // Refresh selectors and book filters for the newly chosen league
+  renderSelectors();
+  renderBookFilters();
+  renderRows();
+}
+
+async function loadProps() {
+  const response = await fetch("/api/props");
+  if (!response.ok) {
+    throw new Error(`API returned ${response.status}`);
+  }
+
+  const payload = await response.json();
+  state.records = payload.records;
+  state.highlights = payload.highlights;
+  state.leagues = payload.leagues || ["WNBA"];
+
+  renderLeagues(state.leagues);
+  renderMarkets(payload.markets);
+  renderSelectors();
+  renderBookFilters();
+  renderHead();
+  renderRows();
+}
+
+function setAllBooks(checked) {
+  for (const input of bookFilter.querySelectorAll("input[type='checkbox']")) {
+    input.checked = checked;
+  }
+  renderRows();
+}
+
+leagueFilter.addEventListener("change", onLeagueChange);
+matchFilter.addEventListener("change", renderRows);
+playerFilter.addEventListener("change", renderRows);
+marketFilter.addEventListener("change", renderRows);
+bookFilter.addEventListener("change", renderRows);
+selectAllBooks.addEventListener("click", () => setAllBooks(true));
+clearBooks.addEventListener("click", () => setAllBooks(false));
+searchFilter.addEventListener("input", renderRows);
+
+loadProps().catch((error) => {
+  statusEl.textContent = "Unable to load props";
+  console.error(error);
+});

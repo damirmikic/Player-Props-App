@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Player Props Odds Comparison</title>
+    <meta name="description" content="Live player prop odds comparison across multiple sportsbooks including Unabated and Merkur Xtip. Compare WNBA, ACB, Lega A and more player props side by side.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Multi-Book · Multi-League Odds Comparison</p>
+          <h1>Player Props</h1>
+        </div>
+        <div class="status" id="status">Loading…</div>
+      </header>
+
+      <div class="board-layout">
+        <section class="control-rail" aria-label="Board controls">
+          <div class="filter-grid">
+            <label>
+              League
+              <!-- Populated dynamically by app.js from /api/props -->
+              <select id="leagueFilter"></select>
+            </label>
+            <label>
+              Match
+              <select id="matchFilter">
+                <option value="all">All matches</option>
+              </select>
+            </label>
+            <label>
+              Player
+              <select id="playerFilter">
+                <option value="all">All players</option>
+              </select>
+            </label>
+            <label>
+              Market
+              <select id="marketFilter">
+                <option value="all">All markets</option>
+              </select>
+            </label>
+            <label>
+              Search
+              <input id="searchFilter" type="search" placeholder="Player, team, book…">
+            </label>
+          </div>
+          <fieldset class="book-filter">
+            <div class="book-filter-head">
+              <legend>Bookmakers</legend>
+              <div class="book-actions">
+                <button type="button" id="selectAllBooks">All</button>
+                <button type="button" id="clearBooks">None</button>
+              </div>
+            </div>
+            <div class="book-list" id="bookFilter"></div>
+          </fieldset>
+        </section>
+
+        <section class="table-wrap" aria-label="Comparative odds table">
+          <table id="oddsTable">
+            <thead id="propsHead"></thead>
+            <tbody id="propsBody"></tbody>
+          </table>
+        </section>
+      </div>
+    </main>
+
+    <script src="/app.js"></script>
+  </body>
+</html>
