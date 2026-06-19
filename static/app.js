@@ -206,6 +206,12 @@ function renderHead() {
 function renderBookCells(row) {
   const activeBooks = selectedBooks();
 
+  const lines = new Set();
+  for (const book of activeBooks) {
+    if (row.books[book]) lines.add(row.books[book].line);
+  }
+  const hasDiffLines = lines.size > 1;
+
   return activeBooks
     .map((book) => {
       const record = row.books[book];
@@ -213,10 +219,12 @@ function renderBookCells(row) {
         return '<td class="empty book-cell">-</td>';
       }
 
+      const diffClass = hasDiffLines ? " line-diff" : "";
+
       return `
         <td class="book-cell">
           <div class="odds-stack">
-            <div class="line-val"><span class="line-label">Line</span> ${record.line.toFixed(1)}</div>
+            <div class="line-val${diffClass}"><span class="line-label">Line</span> ${record.line.toFixed(1)}</div>
             <div class="odds-row">
               <span class="price ${priceClass(record, "over")}">O: ${formatOdds(record.over_odds_decimal)}</span>
               <span class="price ${priceClass(record, "under")}">U: ${formatOdds(record.under_odds_decimal)}</span>

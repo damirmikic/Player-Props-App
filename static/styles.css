@@ -285,6 +285,16 @@ thead .sticky-main {
   border: 1px solid var(--line);
 }
 
+.line-diff {
+  background: #ffedd5;
+  border-color: #fed7aa;
+  color: #9a3412;
+}
+
+.line-diff .line-label {
+  color: #c2410c;
+}
+
 .line-label {
   font-size: 11px;
   color: var(--muted);
