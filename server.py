@@ -1,4 +1,4 @@
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 import json
@@ -49,6 +49,49 @@ def load_all_props():
         print(f"[superbet] fetch failed — {exc}")
 
     all_records = unabated_records + merkur_records + superbet_records
+
+    # Normalize event names and kickoff times across all sources
+    # 1. Collect full game strings that contain " @ "
+    full_games = {r.game for r in all_records if " @ " in r.game}
+    game_to_kickoff = {r.game: r.kickoff_time for r in all_records if r.kickoff_time}
+
+    # 2. Map (league, player) -> best game string
+    player_to_game = {}
+    for r in all_records:
+        player_key = (r.league, r.player)
+        current_best = player_to_game.get(player_key, "")
+        has_at_current = " @ " in current_best
+        has_at_new = " @ " in r.game
+        
+        if not has_at_current and has_at_new:
+            player_to_game[player_key] = r.game
+        elif has_at_current == has_at_new:
+            if len(r.game) > len(current_best):
+                player_to_game[player_key] = r.game
+
+    # 3. Apply normalized game strings and kickoff times to records
+    normalized_records = []
+    for r in all_records:
+        best_game = player_to_game.get((r.league, r.player))
+        
+        # If best_game has no " @ ", maybe it's a partial string.
+        # Try substring resolution against full_games.
+        if not best_game or " @ " not in best_game:
+            matches = [g for g in full_games if r.game in g]
+            if len(matches) == 1:
+                best_game = matches[0]
+            else:
+                best_game = r.game
+        
+        new_game = best_game if best_game else r.game
+        new_kickoff = game_to_kickoff.get(new_game, r.kickoff_time)
+        
+        if new_game != r.game or new_kickoff != r.kickoff_time:
+            normalized_records.append(replace(r, game=new_game, kickoff_time=new_kickoff))
+        else:
+            normalized_records.append(r)
+            
+    all_records = normalized_records
 
     # All distinct leagues present in the merged dataset
     all_leagues = sorted({r.league for r in all_records})

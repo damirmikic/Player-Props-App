@@ -39,6 +39,7 @@ class PropRecord:
     over_odds_decimal: float | None
     under_odds_decimal: float | None
     bookmaker: str
+    kickoff_time: str
     updated_at: str
 
 
@@ -122,6 +123,7 @@ def parse_unabated_props(raw):
                         over_odds_decimal=american_to_decimal(price.get("over")),
                         under_odds_decimal=american_to_decimal(price.get("under")),
                         bookmaker=bookmaker,
+                        kickoff_time=row.get("eventStart") or "",
                         updated_at=price.get("updated_at") or "",
                     )
                 )

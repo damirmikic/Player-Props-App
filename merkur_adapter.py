@@ -135,6 +135,13 @@ def parse_merkur_all_leagues(raw):
         # Game label = opponent team name (Merkur player props are player vs team)
         game = opponent or "Unknown"
 
+        kickoff_ms = match.get("kickOffTime")
+        if kickoff_ms:
+            dt = datetime.datetime.utcfromtimestamp(kickoff_ms / 1000.0)
+            kickoff_time = dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+        else:
+            kickoff_time = ""
+
         # Emit one record per market that has both a line and at least one odds side
         for param_key, market in PARAM_TO_MARKET.items():
             raw_line = params.get(param_key)
@@ -167,6 +174,7 @@ def parse_merkur_all_leagues(raw):
                     over_odds_decimal=float(over_odds)  if over_odds  is not None else None,
                     under_odds_decimal=float(under_odds) if under_odds is not None else None,
                     bookmaker=BOOKMAKER_NAME,
+                    kickoff_time=kickoff_time,
                     updated_at=timestamp,
                 )
             )
@@ -192,6 +200,7 @@ def _write_cache(records):
                     "over_odds_decimal":  r.over_odds_decimal,
                     "under_odds_decimal": r.under_odds_decimal,
                     "bookmaker":          r.bookmaker,
+                    "kickoff_time":       r.kickoff_time,
                     "updated_at":         r.updated_at,
                 }
                 for r in records

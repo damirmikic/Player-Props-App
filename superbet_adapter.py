@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import datetime
 import json
+import re
 import threading
 import time
 from pathlib import Path
@@ -128,8 +129,18 @@ def parse_superbet_props(events: list[dict]) -> list[PropRecord]:
 
     for event in events:
         league    = SUPPORTED_CATEGORIES[event["categoryId"]]
-        game      = event.get("matchName", "").replace("·", " vs ")
+        game      = event.get("matchName", "")
+        game      = re.sub(r'\s*\([ŽWw]\)', '', game)
+        
+        # Superbet (European) lists Home vs Away. Unabated (US) lists Away @ Home.
+        parts = re.split(r'\s+(?:vs|-|·)\s+', game)
+        if len(parts) == 2:
+            game = f"{parts[1]} @ {parts[0]}"
+        else:
+            game = game.replace("·", " @ ").replace(" vs ", " @ ").replace(" - ", " @ ")
+            
         event_id  = event["eventId"]
+        kickoff_time = event.get("matchDate", "").replace(" ", "T") + "Z"
 
         try:
             odds_list = fetch_event_odds(event_id)
@@ -184,6 +195,7 @@ def parse_superbet_props(events: list[dict]) -> list[PropRecord]:
                     over_odds_decimal=sides["over"],
                     under_odds_decimal=sides["under"],
                     bookmaker=BOOKMAKER_NAME,
+                    kickoff_time=kickoff_time,
                     updated_at=timestamp,
                 )
             )
@@ -208,6 +220,7 @@ def _write_cache(records: list[PropRecord]) -> None:
                     "over_odds_decimal":  r.over_odds_decimal,
                     "under_odds_decimal": r.under_odds_decimal,
                     "bookmaker":          r.bookmaker,
+                    "kickoff_time":       r.kickoff_time,
                     "updated_at":         r.updated_at,
                 }
                 for r in records

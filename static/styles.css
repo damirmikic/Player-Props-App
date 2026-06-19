@@ -208,6 +208,9 @@ th {
   color: #344054;
   font-size: 12px;
   text-transform: uppercase;
+  position: sticky;
+  top: 0;
+  z-index: 1;
 }
 
 th:last-child,
@@ -251,7 +254,7 @@ tbody tr:hover td {
 }
 
 thead .sticky-main {
-  z-index: 2;
+  z-index: 3;
   background: #eef2f6;
 }
 

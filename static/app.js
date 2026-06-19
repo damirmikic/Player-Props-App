@@ -166,6 +166,7 @@ function buildComparisonRows(records) {
         team: record.team,
         player: record.player,
         market: record.market,
+        kickoff_time: record.kickoff_time || "",
         books: {},
       });
     }
@@ -174,6 +175,8 @@ function buildComparisonRows(records) {
     if (record.game && record.game.length > row.game.length) row.game = record.game;
     // Prefer non-empty team abbreviation (Merkur doesn't carry player team)
     if (!row.team && record.team) row.team = record.team;
+    // Prefer non-empty kickoff time
+    if (!row.kickoff_time && record.kickoff_time) row.kickoff_time = record.kickoff_time;
     row.books[record.bookmaker] = record;
   }
 
@@ -238,6 +241,7 @@ function renderRows() {
         <strong>${row.player}</strong>
         ${row.team ? `<div class="muted">${row.team}</div>` : ""}
         <div class="game-name">vs ${row.game}</div>
+        ${row.kickoff_time ? `<div class="muted match-time" style="font-size: 0.8em; margin-top: 2px;">🕒 ${new Date(row.kickoff_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>` : ""}
       </td>
       <td>${titleCase(row.market.replace(/_/g, " "))}</td>
       ${renderBookCells(row)}
