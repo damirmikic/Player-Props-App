@@ -13,6 +13,7 @@ Edge cases that the pattern-based logic cannot handle are covered by the alias
 table in name_aliases.json.  Add entries there whenever a mismatch is spotted
 in the UI; the file is reloaded on every server restart.
 """
+from __future__ import annotations
 
 import re
 import json

@@ -28,6 +28,7 @@ Performance note:
   The Merkur endpoint can be slow. A file-backed stale-while-revalidate cache
   (TTL 5 min) ensures sub-millisecond responses after the first run.
 """
+from __future__ import annotations
 
 from dataclasses import dataclass, asdict
 import json

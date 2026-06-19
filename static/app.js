@@ -188,21 +188,14 @@ function renderHead() {
   const activeBooks = selectedBooks();
 
   const bookHeaders = activeBooks
-    .map((book) => `<th colspan="3" class="book-head">${book}</th>`)
-    .join("");
-
-  const bookSubheads = activeBooks
-    .map(() => "<th>Line</th><th>Over</th><th>Under</th>")
+    .map((book) => `<th class="book-head">${book}</th>`)
     .join("");
 
   propsHead.innerHTML = `
     <tr>
-      <th rowspan="2" class="sticky-main">Player</th>
-      <th rowspan="2">Market</th>
+      <th class="sticky-main">Player</th>
+      <th>Market</th>
       ${bookHeaders}
-    </tr>
-    <tr>
-      ${bookSubheads}
     </tr>
   `;
 }
@@ -214,13 +207,19 @@ function renderBookCells(row) {
     .map((book) => {
       const record = row.books[book];
       if (!record) {
-        return '<td class="empty">-</td><td class="empty">-</td><td class="empty">-</td>';
+        return '<td class="empty book-cell">-</td>';
       }
 
       return `
-        <td>${record.line.toFixed(1)}</td>
-        <td><span class="price ${priceClass(record, "over")}">${formatOdds(record.over_odds_decimal)}</span></td>
-        <td><span class="price ${priceClass(record, "under")}">${formatOdds(record.under_odds_decimal)}</span></td>
+        <td class="book-cell">
+          <div class="odds-stack">
+            <div class="line-val"><span class="line-label">Line</span> ${record.line.toFixed(1)}</div>
+            <div class="odds-row">
+              <span class="price ${priceClass(record, "over")}">O: ${formatOdds(record.over_odds_decimal)}</span>
+              <span class="price ${priceClass(record, "under")}">U: ${formatOdds(record.under_odds_decimal)}</span>
+            </div>
+          </div>
+        </td>
       `;
     })
     .join("");

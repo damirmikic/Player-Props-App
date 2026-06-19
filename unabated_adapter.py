@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from dataclasses import asdict, dataclass
 from name_utils import to_canonical_name
 from decimal import Decimal, ROUND_HALF_UP

@@ -260,24 +260,66 @@ thead .sticky-main {
   text-align: center;
 }
 
+.book-cell {
+  text-align: center;
+  padding: 12px !important;
+}
+
+.odds-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+}
+
+.line-val {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--ink);
+  background: #f1f5f9;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+}
+
+.line-label {
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: uppercase;
+  margin-right: 4px;
+  font-weight: 700;
+}
+
+.odds-row {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+}
+
 .price {
   display: inline-flex;
   align-items: center;
-  min-width: 68px;
+  justify-content: center;
+  min-width: 64px;
   min-height: 28px;
   border-radius: 6px;
   padding: 4px 8px;
   font-weight: 800;
+  font-size: 13px;
+  border: 1px solid transparent;
+  background: #f8fafc;
 }
 
 .best-over {
   background: var(--accent-soft);
   color: #075e56;
+  border-color: #0f766e;
 }
 
 .best-under {
   background: var(--under-soft);
   color: #8a5b00;
+  border-color: #b47600;
 }
 
 @media (max-width: 720px) {

@@ -23,6 +23,7 @@ Supported league categories (categoryId → label):
 
 Prices are already in decimal format — no conversion needed.
 """
+from __future__ import annotations
 
 import datetime
 import json
