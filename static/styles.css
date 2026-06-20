@@ -181,6 +181,7 @@ legend {
 
 .table-wrap {
   overflow: auto;
+  max-height: calc(100vh - 220px);
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 8px;
