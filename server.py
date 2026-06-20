@@ -12,6 +12,7 @@ import superbet_adapter
 import stoiximan_adapter
 import maxbet_adapter
 from unabated_adapter import build_highlights
+from name_utils import to_canonical_name
 
 
 ROOT = Path(__file__).resolve().parent
@@ -66,6 +67,10 @@ def load_all_props():
         print(f"[maxbet] fetch failed — {exc}")
 
     all_records = unabated_records + merkur_records + superbet_records + stoiximan_records + maxbet_records
+
+    # Re-normalize player names against the current alias table so that alias
+    # changes take effect immediately without flushing adapter caches.
+    all_records = [replace(r, player=to_canonical_name(r.player)) for r in all_records]
 
     # Strip gender markers (e.g. "(W)", "(M)") from all game strings so that
     # "Washington Mystics (W) @ Minnesota Lynx (W)" and

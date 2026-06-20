@@ -25,14 +25,16 @@ _ALIAS_FILE = Path(__file__).resolve().parent / "name_aliases.json"
 _CANONICAL_RE = re.compile(r'^.+\s+[A-Z]\.$')
 
 _aliases: dict | None = None
+_alias_mtime: float = 0.0
 
 
 def load_aliases() -> dict:
     """Read name_aliases.json from disk. Returns {} on any error."""
-    global _aliases
+    global _aliases, _alias_mtime
     try:
         if _ALIAS_FILE.exists():
             _aliases = json.loads(_ALIAS_FILE.read_text(encoding="utf-8"))
+            _alias_mtime = _ALIAS_FILE.stat().st_mtime
         else:
             _aliases = {}
     except Exception as exc:
@@ -42,9 +44,14 @@ def load_aliases() -> dict:
 
 
 def _get_aliases() -> dict:
-    global _aliases
-    if _aliases is None:
-        load_aliases()
+    global _aliases, _alias_mtime
+    try:
+        mtime = _ALIAS_FILE.stat().st_mtime
+        if _aliases is None or mtime != _alias_mtime:
+            load_aliases()
+    except Exception:
+        if _aliases is None:
+            _aliases = {}
     return _aliases
 
 
