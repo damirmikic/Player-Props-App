@@ -3,6 +3,7 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 import json
 import mimetypes
+import re
 import urllib.parse
 
 import unabated_adapter
@@ -65,6 +66,14 @@ def load_all_props():
         print(f"[maxbet] fetch failed — {exc}")
 
     all_records = unabated_records + merkur_records + superbet_records + stoiximan_records + maxbet_records
+
+    # Strip gender markers (e.g. "(W)", "(M)") from all game strings so that
+    # "Washington Mystics (W) @ Minnesota Lynx (W)" and
+    # "Washington Mystics @ Minnesota Lynx" resolve to the same event.
+    all_records = [
+        replace(r, game=re.sub(r'\s*\([WM]\)', '', r.game).strip())
+        for r in all_records
+    ]
 
     # Normalize event names and kickoff times across all sources
     # 1. Collect full game strings that contain " @ "
