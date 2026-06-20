@@ -212,8 +212,8 @@ def build_highlights(records):
         over_group = [item for item in group if item.over_odds_decimal is not None]
         under_group = [item for item in group if item.under_odds_decimal is not None]
         highlights[key] = {
-            "best_over": highlight_id(max(over_group, key=lambda item: (-item.line, item.over_odds_decimal))) if over_group else None,
-            "best_under": highlight_id(max(under_group, key=lambda item: (item.line, item.under_odds_decimal))) if under_group else None,
+            "best_over": highlight_id(max(over_group, key=lambda item: item.over_odds_decimal)) if over_group else None,
+            "best_under": highlight_id(max(under_group, key=lambda item: item.under_odds_decimal)) if under_group else None,
         }
 
     return highlights

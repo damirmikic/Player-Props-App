@@ -203,14 +203,22 @@ function renderHead() {
   `;
 }
 
+function consensusLine(row, activeBooks) {
+  const counts = new Map();
+  for (const book of activeBooks) {
+    const line = row.books[book]?.line;
+    if (line !== undefined) counts.set(line, (counts.get(line) ?? 0) + 1);
+  }
+  let best = null, bestCount = 0;
+  for (const [line, count] of counts) {
+    if (count > bestCount) { best = line; bestCount = count; }
+  }
+  return best;
+}
+
 function renderBookCells(row) {
   const activeBooks = selectedBooks();
-
-  const lines = new Set();
-  for (const book of activeBooks) {
-    if (row.books[book]) lines.add(row.books[book].line);
-  }
-  const hasDiffLines = lines.size > 1;
+  const consensus = consensusLine(row, activeBooks);
 
   return activeBooks
     .map((book) => {
@@ -219,7 +227,7 @@ function renderBookCells(row) {
         return '<td class="empty book-cell">-</td>';
       }
 
-      const diffClass = hasDiffLines ? " line-diff" : "";
+      const diffClass = record.line !== consensus ? " line-diff" : "";
 
       return `
         <td class="book-cell">
