@@ -8,6 +8,7 @@ import urllib.parse
 import unabated_adapter
 import merkur_adapter
 import superbet_adapter
+import stoiximan_adapter
 from unabated_adapter import build_highlights
 
 
@@ -48,7 +49,14 @@ def load_all_props():
     except Exception as exc:
         print(f"[superbet] fetch failed — {exc}")
 
-    all_records = unabated_records + merkur_records + superbet_records
+    # --- Stoiximan (ACB, WNBA, Izrael — "N+" threshold bets, over only) ---
+    stoiximan_records = []
+    try:
+        stoiximan_records = stoiximan_adapter.load_stoiximan_props()
+    except Exception as exc:
+        print(f"[stoiximan] fetch failed — {exc}")
+
+    all_records = unabated_records + merkur_records + superbet_records + stoiximan_records
 
     # Normalize event names and kickoff times across all sources
     # 1. Collect full game strings that contain " @ "
@@ -106,9 +114,10 @@ def load_all_props():
         "records": [asdict(r) for r in all_records],
         "highlights": build_highlights(all_records),
         "sources": {
-            "unabated": unabated_adapter.UNABATED_WNBA_PROPS_URL,
-            "merkur":   merkur_adapter.MERKUR_SK_URL,
-            "superbet": superbet_adapter.EVENTS_BY_DATE_URL,
+            "unabated":  unabated_adapter.UNABATED_WNBA_PROPS_URL,
+            "merkur":    merkur_adapter.MERKUR_SK_URL,
+            "superbet":  superbet_adapter.EVENTS_BY_DATE_URL,
+            "stoiximan": stoiximan_adapter._BASE,
         },
     }
 
