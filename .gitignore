@@ -1,5 +1,4 @@
 __pycache__/
 *.pyc
 unabated_*.json
-merkur_cache.json
-superbet_cache.json
+*_cache.json
