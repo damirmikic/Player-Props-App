@@ -4,6 +4,7 @@ from pathlib import Path
 import json
 import mimetypes
 import re
+import threading
 import urllib.parse
 
 import unabated_adapter
@@ -16,6 +17,53 @@ from name_utils import to_canonical_name
 
 
 ROOT = Path(__file__).resolve().parent
+
+# Snapshot of the last API response used to detect line/odds movement.
+# Keyed by "player|market|bookmaker"; values are {line, over_odds_decimal, under_odds_decimal}.
+_prev_snapshot: dict = {}
+_snapshot_lock = threading.Lock()
+
+
+def _snapshot_key(r) -> str:
+    return f"{r.player}|{r.market}|{r.bookmaker}"
+
+
+def _compute_deltas(records: list, prev: dict) -> dict:
+    """Return {snapshot_key: delta_dict} for records whose line or odds changed since prev."""
+    result = {}
+    for r in records:
+        key = _snapshot_key(r)
+        p = prev.get(key)
+        if p is None:
+            continue
+
+        ld = round(r.line - p["line"], 2)
+        od = (
+            round(r.over_odds_decimal - p["over_odds_decimal"], 3)
+            if r.over_odds_decimal is not None and p["over_odds_decimal"] is not None
+            else None
+        )
+        ud = (
+            round(r.under_odds_decimal - p["under_odds_decimal"], 3)
+            if r.under_odds_decimal is not None and p["under_odds_decimal"] is not None
+            else None
+        )
+
+        if not (
+            abs(ld) > 0.001
+            or (od is not None and abs(od) > 0.001)
+            or (ud is not None and abs(ud) > 0.001)
+        ):
+            continue
+
+        result[key] = {
+            "line_delta":       ld if abs(ld) > 0.001 else None,
+            "over_odds_delta":  od if od is not None and abs(od) > 0.001 else None,
+            "under_odds_delta": ud if ud is not None and abs(ud) > 0.001 else None,
+        }
+    return result
+
+
 STATIC_ROOT = ROOT / "static"
 HOST = "127.0.0.1"
 PORT = 8000
@@ -129,11 +177,34 @@ def load_all_props():
     # All distinct markets across all leagues / sources
     all_markets = sorted({r.market for r in all_records})
 
+    # --- Movement detection ---
+    with _snapshot_lock:
+        prev = dict(_prev_snapshot)
+
+    movements = _compute_deltas(all_records, prev)
+
+    with _snapshot_lock:
+        _prev_snapshot.clear()
+        for r in all_records:
+            _prev_snapshot[_snapshot_key(r)] = {
+                "line":               r.line,
+                "over_odds_decimal":  r.over_odds_decimal,
+                "under_odds_decimal": r.under_odds_decimal,
+            }
+
+    def _record_dict(r):
+        d = asdict(r)
+        mv = movements.get(_snapshot_key(r))
+        d["line_delta"]       = mv["line_delta"]       if mv else None
+        d["over_odds_delta"]  = mv["over_odds_delta"]  if mv else None
+        d["under_odds_delta"] = mv["under_odds_delta"] if mv else None
+        return d
+
     return {
         "phase": "Phase 2: Multi-Source, Multi-League Odds Comparison",
         "leagues": all_leagues,
         "markets": all_markets,
-        "records": [asdict(r) for r in all_records],
+        "records": [_record_dict(r) for r in all_records],
         "highlights": build_highlights(all_records),
         "sources": {
             "unabated":  unabated_adapter.UNABATED_WNBA_PROPS_URL,

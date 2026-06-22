@@ -33,6 +33,20 @@ function formatOdds(value) {
   return value === null || value === undefined ? "-" : Number(value).toFixed(2);
 }
 
+function oddsArrow(delta) {
+  if (delta == null) return "";
+  return delta > 0
+    ? '<span class="move-up">↑</span>'
+    : '<span class="move-down">↓</span>';
+}
+
+function lineArrow(delta) {
+  if (delta == null) return "";
+  return delta > 0
+    ? '<span class="move-line">↑</span>'
+    : '<span class="move-line">↓</span>';
+}
+
 function uniqueSorted(values) {
   return [...new Set(values)].sort((a, b) => a.localeCompare(b));
 }
@@ -232,10 +246,10 @@ function renderBookCells(row) {
       return `
         <td class="book-cell">
           <div class="odds-stack">
-            <div class="line-val${diffClass}"><span class="line-label">Line</span> ${record.line.toFixed(1)}</div>
+            <div class="line-val${diffClass}"><span class="line-label">Line</span> ${record.line.toFixed(1)}${lineArrow(record.line_delta)}</div>
             <div class="odds-row">
-              <span class="price ${priceClass(record, "over")}">O: ${formatOdds(record.over_odds_decimal)}</span>
-              <span class="price ${priceClass(record, "under")}">U: ${formatOdds(record.under_odds_decimal)}</span>
+              <span class="price ${priceClass(record, "over")}">O: ${formatOdds(record.over_odds_decimal)}${oddsArrow(record.over_odds_delta)}</span>
+              <span class="price ${priceClass(record, "under")}">U: ${formatOdds(record.under_odds_decimal)}${oddsArrow(record.under_odds_delta)}</span>
             </div>
           </div>
         </td>
@@ -266,7 +280,14 @@ function renderRows() {
   }
 
   const league = leagueFilter.value;
-  statusEl.textContent = `${rows.length} comparisons · ${league}`;
+  const movedCount = rows.filter((row) =>
+    Object.values(row.books).some(
+      (r) => r.line_delta != null || r.over_odds_delta != null || r.under_odds_delta != null
+    )
+  ).length;
+  statusEl.textContent =
+    `${rows.length} comparisons · ${league}` +
+    (movedCount ? ` · ${movedCount} moved` : "");
 }
 
 function onLeagueChange() {

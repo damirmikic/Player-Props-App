@@ -19,7 +19,7 @@ Single Python process serves both the REST API and static files.
 **Backend entry point:** `server.py` — subclasses `SimpleHTTPRequestHandler`. One API route: `GET /api/props` returns a JSON array of merged prop records with highlight flags. All other routes serve files from `static/`.
 
 **Data flow:**
-1. `server.py` calls all three adapters on each request
+1. `server.py` calls all five adapters on each request
 2. Each adapter fetches/parses its source into `PropRecord` dataclasses (defined in `unabated_adapter.py`)
 3. Server merges all records, normalizes game strings and kickoff times across sources (player→best game string resolution), computes highlight flags (best over/under per player×market), and returns JSON
 
@@ -30,7 +30,7 @@ Single Python process serves both the REST API and static files.
 - `stoiximan_adapter.py` — Stoiximan REST API (ACB, WNBA, Izrael — Lega A not available). One fetch per league×market-type: `…/{league-path}/{market_type}/?req=la,s,stnf,c,mb,mbl`. Offers "N+" threshold bets only (e.g. "21+" = score ≥ 21). Converted to line = N−0.5; `under_odds_decimal` is always `None`. Per player×market, only the single threshold whose over odds are closest to 1.95 (within the 1.70–2.20 realistic range) is kept. Same stale-while-revalidate cache pattern.
 - `maxbet_adapter.py` — MaxBet RS REST API (WNBA, ACB). Single endpoint `…/sport/SK/mob`. Each entry in `esMatches` represents one *player* (not a game): `home` = player full name, `away` = player's team, `params` = `{ouPlPoints, ouPlRebounds, ouPlAssists}` lines, `odds` = `{tipTypeId: decimal}`. Tip-type IDs: 51679/51681 = points over/under, 51682/51684 = assists over/under, 51685/51687 = rebounds over/under. Game strings reconstructed by pairing the two teams sharing the same (leagueId, kickOffTime). Leagues filtered by ID: 204566 = WNBA, 203039 = ACB. Same stale-while-revalidate cache pattern.
 
-**Name normalization:** `name_utils.py` canonicalizes player names to `"Last F."` format. Three-tier lookup: `name_aliases.json` alias table → regex pattern matching → direct conversion. Add new aliases to `name_aliases.json` when names don't match across sources.
+**Name normalization:** `name_utils.py` canonicalizes player names to `"Last F."` format. Three-tier lookup: `name_aliases.json` alias table → regex pattern matching → direct conversion. Add new aliases to `name_aliases.json` when names don't match across sources — the file is watched by mtime and hot-reloads automatically; no server restart needed. The server also re-runs `to_canonical_name()` on every merged record at request time, so alias fixes take effect on the next API call even without clearing adapter caches. Multi-word surnames (e.g. "Van Lith", "De Larrea") require explicit alias entries since the pattern-based fallback only uses the last token.
 
 **Frontend:** `static/app.js` is a vanilla JS SPA (no framework, no build step). It fetches `/api/props` on load and renders a filterable comparison table. Filters cascade: League → Match → Player. Bookmaker checkboxes are dynamically generated from the data. Highlights (best odds) are signaled by `is_best_over` / `is_best_under` flags from the API.
 
@@ -38,7 +38,7 @@ Single Python process serves both the REST API and static files.
 
 1. Create `<source>_adapter.py` with a `get_props()` function returning `list[PropRecord]`
 2. Import and call it in `server.py` alongside the existing adapters
-3. Normalize player names through `name_utils.normalize_name()` before constructing records
+3. Normalize player names through `name_utils.to_canonical_name()` before constructing records
 
 ## Adding a New Market/Prop Type
 

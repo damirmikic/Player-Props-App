@@ -336,6 +336,19 @@ thead .sticky-main {
   border-color: #b47600;
 }
 
+.move-up,
+.move-down,
+.move-line {
+  font-size: 10px;
+  font-weight: 900;
+  margin-left: 2px;
+  vertical-align: super;
+}
+
+.move-up   { color: #16a34a; }
+.move-down { color: #dc2626; }
+.move-line { color: #d97706; }
+
 @media (max-width: 720px) {
   .topbar {
     align-items: stretch;
