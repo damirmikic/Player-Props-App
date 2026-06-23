@@ -18,6 +18,7 @@ EXCLUDED_BOOKMAKERS = {
     "fanatics",
     "fliff",
     "hard rock",
+    "hard rock (s)",
     "parx",
     "prizepicks",
     "prophet exchange",
