@@ -16,6 +16,11 @@ const searchFilter = document.querySelector("#searchFilter");
 const propsHead = document.querySelector("#propsHead");
 const propsBody = document.querySelector("#propsBody");
 const statusEl = document.querySelector("#status");
+const refreshBtn = document.querySelector("#refreshBtn");
+
+let _lastRowStatus = "";
+let _lastFetchedAt = null;
+let _refreshTimer = null;
 
 function recordKey(record) {
   return `${record.player}|${record.market}|${record.bookmaker}|${record.line}`;
@@ -45,6 +50,15 @@ function lineArrow(delta) {
   return delta > 0
     ? '<span class="move-line">↑</span>'
     : '<span class="move-line">↓</span>';
+}
+
+function updateStatus() {
+  if (!_lastFetchedAt) return;
+  const ageSec = Math.floor((Date.now() - _lastFetchedAt) / 1000);
+  const ageStr = ageSec < 60
+    ? `${ageSec}s ago`
+    : `${Math.floor(ageSec / 60)}m ${ageSec % 60}s ago`;
+  statusEl.textContent = `${_lastRowStatus} · ${ageStr}`;
 }
 
 function uniqueSorted(values) {
@@ -84,6 +98,7 @@ function priceClass(record, side) {
 }
 
 function renderLeagues(leagues) {
+  const current = leagueFilter.value;
   leagueFilter.replaceChildren();
   for (const league of leagues) {
     const option = document.createElement("option");
@@ -91,30 +106,41 @@ function renderLeagues(leagues) {
     option.textContent = league;
     leagueFilter.appendChild(option);
   }
-  // Default to WNBA if available, else first league
-  const defaultLeague = leagues.includes("WNBA") ? "WNBA" : leagues[0];
-  if (defaultLeague) leagueFilter.value = defaultLeague;
+  if (leagues.includes(current)) {
+    leagueFilter.value = current;
+  } else {
+    const defaultLeague = leagues.includes("WNBA") ? "WNBA" : leagues[0];
+    if (defaultLeague) leagueFilter.value = defaultLeague;
+  }
 }
 
 function renderMarkets(markets) {
+  const current = marketFilter.value;
   clearSelect(marketFilter, "All markets");
   for (const market of markets) {
     const option = document.createElement("option");
     option.value = market;
-    // Pretty-print market names: "three_pointers" → "Three Pointers"
     option.textContent = titleCase(market.replace(/_/g, " "));
     marketFilter.appendChild(option);
+  }
+  if ([...marketFilter.options].some((o) => o.value === current)) {
+    marketFilter.value = current;
   }
 }
 
 function renderSelectors() {
   const currentLeague = leagueFilter.value;
+  const currentMatch = matchFilter.value;
+  const currentPlayer = playerFilter.value;
   const leagueRecords = state.records.filter((r) => r.league === currentLeague);
 
   clearSelect(matchFilter, "All matches");
   clearSelect(playerFilter, "All players");
   addOptions(matchFilter, uniqueSorted(leagueRecords.map((r) => r.game)));
   addOptions(playerFilter, uniqueSorted(leagueRecords.map((r) => r.player)));
+
+  if ([...matchFilter.options].some((o) => o.value === currentMatch)) matchFilter.value = currentMatch;
+  if ([...playerFilter.options].some((o) => o.value === currentPlayer)) playerFilter.value = currentPlayer;
 }
 
 function selectedBooks() {
@@ -125,7 +151,11 @@ function selectedBooks() {
 
 function renderBookFilters() {
   const currentLeague = leagueFilter.value;
-  // Only show books that have records for the current league
+  const unchecked = new Set(
+    [...bookFilter.querySelectorAll("input[type='checkbox']:not(:checked)")].map((i) => i.value)
+  );
+  const hadState = bookFilter.querySelector("input") !== null;
+
   const leagueBooks = uniqueSorted(
     state.records
       .filter((r) => r.league === currentLeague)
@@ -136,8 +166,9 @@ function renderBookFilters() {
   for (const book of leagueBooks) {
     const label = document.createElement("label");
     label.className = "check-row";
+    const checked = !hadState || !unchecked.has(book);
     label.innerHTML = `
-      <input type="checkbox" value="${book}" checked>
+      <input type="checkbox" value="${book}" ${checked ? "checked" : ""}>
       <span>${book}</span>
     `;
     bookFilter.appendChild(label);
@@ -285,9 +316,10 @@ function renderRows() {
       (r) => r.line_delta != null || r.over_odds_delta != null || r.under_odds_delta != null
     )
   ).length;
-  statusEl.textContent =
+  _lastRowStatus =
     `${rows.length} comparisons · ${league}` +
     (movedCount ? ` · ${movedCount} moved` : "");
+  updateStatus();
 }
 
 function onLeagueChange() {
@@ -298,22 +330,34 @@ function onLeagueChange() {
 }
 
 async function loadProps() {
-  const response = await fetch("/api/props");
-  if (!response.ok) {
-    throw new Error(`API returned ${response.status}`);
+  refreshBtn.disabled = true;
+  refreshBtn.classList.add("loading");
+  clearTimeout(_refreshTimer);
+
+  try {
+    const response = await fetch("/api/props");
+    if (!response.ok) throw new Error(`API returned ${response.status}`);
+
+    const payload = await response.json();
+    state.records = payload.records;
+    state.highlights = payload.highlights;
+    state.leagues = payload.leagues || ["WNBA"];
+    _lastFetchedAt = Date.now();
+
+    renderLeagues(state.leagues);
+    renderMarkets(payload.markets);
+    renderSelectors();
+    renderBookFilters();
+    renderHead();
+    renderRows();
+  } catch (error) {
+    statusEl.textContent = `${_lastRowStatus || "Error"} · unable to refresh`;
+    console.error(error);
+  } finally {
+    refreshBtn.disabled = false;
+    refreshBtn.classList.remove("loading");
+    _refreshTimer = setTimeout(loadProps, 30_000);
   }
-
-  const payload = await response.json();
-  state.records = payload.records;
-  state.highlights = payload.highlights;
-  state.leagues = payload.leagues || ["WNBA"];
-
-  renderLeagues(state.leagues);
-  renderMarkets(payload.markets);
-  renderSelectors();
-  renderBookFilters();
-  renderHead();
-  renderRows();
 }
 
 function setAllBooks(checked) {
@@ -331,8 +375,7 @@ bookFilter.addEventListener("change", renderRows);
 selectAllBooks.addEventListener("click", () => setAllBooks(true));
 clearBooks.addEventListener("click", () => setAllBooks(false));
 searchFilter.addEventListener("input", renderRows);
+refreshBtn.addEventListener("click", loadProps);
 
-loadProps().catch((error) => {
-  statusEl.textContent = "Unable to load props";
-  console.error(error);
-});
+setInterval(updateStatus, 1000);
+loadProps();

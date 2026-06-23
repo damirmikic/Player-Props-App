@@ -11,11 +11,20 @@ from urllib.request import Request, urlopen
 UNABATED_WNBA_PROPS_URL = "https://content.unabated.com/markets/v2/league/7/propodds.json"
 SUPPORTED_MARKETS = {"points", "assists", "rebounds"}
 EXCLUDED_BOOKMAKERS = {
+    "betrivers",
+    "bovada",
+    "caesars",
     "draftkings pick6",
+    "fanatics",
     "fliff",
+    "hard rock",
+    "parx",
     "prizepicks",
+    "prophet exchange",
     "sleeper",
     "splash sports",
+    "sportsbetting",
+    "sugarhouse",
     "underdog fantasy",
 }
 BET_TYPE_MARKETS = {
