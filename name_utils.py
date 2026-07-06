@@ -29,6 +29,9 @@ _LEAGUE_ALIAS_FILE = Path(__file__).resolve().parent / "league_aliases.json"
 # Matches Merkur's "Last F." format: one or more words, space, capital letter, period
 _CANONICAL_RE = re.compile(r'^.+\s+[A-Z]\.$')
 
+# Matches Mozzart's "F.Last" format: capital letter, period, no space, surname
+_INITIAL_DOT_LAST_RE = re.compile(r'^([A-Z])\.([A-Za-z\-\']+)$')
+
 _aliases: dict | None = None
 _alias_mtime: float = 0.0
 
@@ -87,8 +90,9 @@ def to_canonical_name(raw: str) -> str:
     --------------
     1. Alias table (name_aliases.json) — exact string match
     2. Already canonical ("Boston A." pattern) — returned unchanged
-    3. "First [Middle...] Last" (Unabated) — converted to "Last F."
-    4. Fallback — returned as-is
+    3. "F.Last" (Mozzart) — converted to "Last F."
+    4. "First [Middle...] Last" (Unabated) — converted to "Last F."
+    5. Fallback — returned as-is
 
     Examples
     --------
@@ -115,7 +119,13 @@ def to_canonical_name(raw: str) -> str:
     if _CANONICAL_RE.match(name):
         return name
 
-    # 3. Full name → "Last F."
+    # 3. "F.Last" (Mozzart) → "Last F."
+    m = _INITIAL_DOT_LAST_RE.match(name)
+    if m:
+        initial, last = m.groups()
+        return f"{last} {initial}."
+
+    # 4. Full name → "Last F."
     parts = name.split()
     if len(parts) >= 2:
         last = parts[-1]

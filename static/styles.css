@@ -102,6 +102,25 @@ h1 {
   font-size: 14px;
 }
 
+.mozzart-watch {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: baseline;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  padding: 8px 12px;
+  margin-bottom: 18px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.mozzart-watch-label {
+  font-weight: 700;
+  color: var(--accent);
+}
+
 .board-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr);

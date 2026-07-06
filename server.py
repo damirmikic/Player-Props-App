@@ -12,6 +12,7 @@ import merkur_adapter
 import superbet_adapter
 import stoiximan_adapter
 import maxbet_adapter
+import mozzart_adapter
 from unabated_adapter import build_highlights
 from name_utils import to_canonical_name, to_canonical_league
 
@@ -114,7 +115,17 @@ def load_all_props():
     except Exception as exc:
         print(f"[maxbet] fetch failed — {exc}")
 
-    all_records = unabated_records + merkur_records + superbet_records + stoiximan_records + maxbet_records
+    # --- Mozzart (whichever "...Players" competitions are currently live) ---
+    mozzart_records = []
+    try:
+        mozzart_records = mozzart_adapter.load_mozzart_props()
+    except Exception as exc:
+        print(f"[mozzart] fetch failed — {exc}")
+
+    all_records = (
+        unabated_records + merkur_records + superbet_records
+        + stoiximan_records + maxbet_records + mozzart_records
+    )
 
     # Re-normalize player names against the current alias table so that alias
     # changes take effect immediately without flushing adapter caches.
@@ -217,6 +228,7 @@ def load_all_props():
             "superbet":  superbet_adapter.EVENTS_BY_DATE_URL,
             "stoiximan": stoiximan_adapter._BASE,
             "maxbet":    maxbet_adapter._BASE_URL,
+            "mozzart":   mozzart_adapter._BASE_URL,
         },
     }
 
@@ -227,6 +239,11 @@ class AppHandler(SimpleHTTPRequestHandler):
 
         if parsed.path == "/api/props":
             payload = load_all_props()
+            self.send_json(payload)
+            return
+
+        if parsed.path == "/api/mozzart-leagues":
+            payload = mozzart_adapter.load_mozzart_player_prop_leagues()
             self.send_json(payload)
             return
 
