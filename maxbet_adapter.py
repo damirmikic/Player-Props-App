@@ -17,9 +17,9 @@ Odds tip-type IDs:
   51682 PL_ASSISTS_OVER  51684 PL_ASSISTS_UNDER
   51685 PL_REBOUNDS_OVER 51687 PL_REBOUNDS_UNDER
 
-Player-prop league IDs (others are series/outright bets — skipped):
-  204566 → "WNBA"
-  203039 → "ACB"
+Leagues are auto-discovered: any esMatch entry that carries at least one
+player-prop parameter (ouPlPoints, ouPlAssists, ouPlRebounds) is accepted.
+Series/outright-bet entries are skipped because they have no ouPl* params.
 
 Game strings are reconstructed by pairing the two teams that share a
 (league, kickOffTime) slot. The resulting "TeamA @ TeamB" strings are
@@ -28,6 +28,7 @@ approximate; cross-source normalization in server.py will refine them.
 from __future__ import annotations
 
 import datetime
+import re
 import json
 import threading
 import time
@@ -45,11 +46,20 @@ _BASE_URL = (
 
 BOOKMAKER_NAME = "MaxBet"
 
-# Only leagues that carry per-player O/U props
-PLAYER_PROP_LEAGUES: dict[int, str] = {
-    204566: "WNBA",
-    203039: "ACB",
-}
+# MaxBet prefixes player-prop league names with the Serbian phrase
+# "Poeni igrača" (Player Points). Strip it to get the bare league name.
+_MAXBET_PREFIX_RE = re.compile(
+    r'^poeni\s+igra[\u010dc]a\s*[-–]?\s*', re.IGNORECASE
+)
+
+
+def _league_label(entry: dict) -> str:
+    """Derive a clean league label from a raw MaxBet esMatches entry."""
+    raw = (entry.get("leagueName") or entry.get("league") or "").strip()
+    if raw:
+        return _MAXBET_PREFIX_RE.sub("", raw).strip()
+    league_id = entry.get("leagueId")
+    return f"League {league_id}" if league_id is not None else "Unknown"
 
 # Tip-type ID → (market_name, side)
 _ODDS_MAP: dict[str, tuple[str, str]] = {
@@ -130,10 +140,10 @@ def fetch_maxbet_props() -> list[PropRecord]:
     entries   = data.get("esMatches", [])
 
     # Keep only player-prop leagues
+    # Auto-discover: keep any entry that exposes at least one player-prop param.
     pl_entries = [
         e for e in entries
-        if e.get("leagueId") in PLAYER_PROP_LEAGUES
-        and e.get("params")
+        if e.get("params")
         and any(k in _PARAM_MARKET for k in e.get("params", {}))
     ]
 
@@ -141,7 +151,7 @@ def fetch_maxbet_props() -> list[PropRecord]:
     records: list[PropRecord] = []
 
     for e in pl_entries:
-        league      = PLAYER_PROP_LEAGUES[e["leagueId"]]
+        league      = _league_label(e)
         slot        = (e["leagueId"], e["kickOffTime"])
         game        = game_strings.get(slot, "")
         kickoff_time = _epoch_ms_to_iso(e["kickOffTime"])

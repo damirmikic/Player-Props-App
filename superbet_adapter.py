@@ -15,11 +15,9 @@ Over/under is determined from the odds `name` field:
   "Više od"  → over
   "Manje od" → under
 
-Supported league categories (categoryId → label):
-  61   → "WNBA"
-  108  → "ACB"
-  56   → "Lega A"
-  185  → "Izrael"
+All basketball categories (sportId == 4) are fetched automatically.
+The ``categoryName`` returned by the API is used as the league label.
+Only events that contain known player-prop market IDs produce records.
 
 Prices are already in decimal format — no conversion needed.
 """
@@ -44,12 +42,17 @@ BOOKMAKER_NAME = "Superbet"
 
 SPORT_ID_BASKETBALL = 4
 
-SUPPORTED_CATEGORIES = {
+# Soft name map: categoryId → human-readable league label.
+# Used for display only — does NOT filter out unknown categories.
+# Any categoryId missing here falls back to "Cat {id}" so new leagues
+# are automatically included with a temporary numeric label.
+CATEGORY_NAMES: dict[int, str] = {
     61:  "WNBA",
     108: "ACB",
     56:  "Lega A",
     185: "Izrael",
 }
+
 
 PLAYER_PROP_MARKETS = {
     # ACB / Lega A / Izrael
@@ -100,7 +103,6 @@ def fetch_superbet_events() -> list[dict]:
     return [
         e for e in data.get("data", [])
         if e.get("sportId") == SPORT_ID_BASKETBALL
-        and e.get("categoryId") in SUPPORTED_CATEGORIES
     ]
 
 
@@ -128,7 +130,10 @@ def parse_superbet_props(events: list[dict]) -> list[PropRecord]:
     timestamp = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
 
     for event in events:
-        league    = SUPPORTED_CATEGORIES[event["categoryId"]]
+        league    = CATEGORY_NAMES.get(event.get("categoryId", -1))
+        if league is None:
+            cid = event.get("categoryId", "?")
+            league = (event.get("categoryName") or f"Cat {cid}").strip()
         game      = event.get("matchName", "")
         game      = re.sub(r'\s*\([ŽWw]\)', '', game)
         

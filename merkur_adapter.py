@@ -15,14 +15,10 @@ Odd-ID → market mapping (same IDs used across all supported leagues):
   51688 / 51690  Over / Under 3-Pointers
   55215 / 55217  Over / Under TPRA (Pts+Reb+Ast combined)
 
-Supported leagues (leagueId → league label):
-  2359021  WNBA Igrači     → "WNBA"
-  2314422  ACB Igrači      → "ACB"
-  2332283  Lega A Igrači   → "Lega A"
-  2351877  Izrael igrači   → "Izrael"
-
-The "Duel Strelaca" league (2315079) is a fantasy player-vs-player market with
-a different odds structure and is intentionally excluded.
+Leagues are auto-discovered: any esMatch entry that carries at least one
+player-prop parameter (ouPlPoints, ouPlAssists, etc.) is accepted regardless
+of its leagueId.  "Duel Strelaca" fantasy matchups are excluded naturally
+because they have a different odds structure with no ouPl* keys.
 
 Performance note:
   The Merkur endpoint can be slow. A file-backed stale-while-revalidate cache
@@ -33,6 +29,7 @@ from __future__ import annotations
 from dataclasses import dataclass, asdict
 import json
 import gzip
+import re
 import threading
 import time
 from pathlib import Path
@@ -47,13 +44,22 @@ MERKUR_SK_URL = (
     "?annex=0&desktopVersion=2.44.3.18&locale=sr"
 )
 
-# Supported leagues: leagueId → canonical league label shown in the UI
-SUPPORTED_LEAGUES = {
-    2359021: "WNBA",
-    2314422: "ACB",
-    2332283: "Lega A",
-    2351877: "Izrael",
-}
+# League names in the Merkur API end with the Serbian word "Igrači" (Players).
+# This regex strips that suffix so auto-discovered names stay readable.
+_IGRACI_RE = re.compile(r'\s+igra[čc][ei]\s*$', re.IGNORECASE)
+
+
+def _league_label(match: dict) -> str:
+    """Derive a clean league label from a raw esMatches entry.
+
+    Tries ``leagueName`` / ``league`` first; falls back to the numeric
+    ``leagueId`` so we never silently drop data from unknown leagues.
+    """
+    raw = (match.get("leagueName") or match.get("league") or "").strip()
+    if raw:
+        return _IGRACI_RE.sub("", raw).strip()
+    league_id = match.get("leagueId")
+    return f"League {league_id}" if league_id is not None else "Unknown"
 
 BOOKMAKER_NAME = "Merkur Xtip"
 
@@ -119,15 +125,16 @@ def parse_merkur_all_leagues(raw):
     timestamp = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
 
     for match in raw.get("esMatches", []):
-        league_id = match.get("leagueId")
-        league_label = SUPPORTED_LEAGUES.get(league_id)
-        if league_label is None:
-            continue  # skip unsupported leagues (e.g. Duel Strelaca)
+        params   = match.get("params") or {}
+        # Auto-discover: skip entries without any player-prop parameter
+        # (e.g. "Duel Strelaca" fantasy markets have no ouPl* keys).
+        if not any(k in PARAM_TO_MARKET for k in params):
+            continue
 
+        league_label = _league_label(match)
         player   = to_canonical_name((match.get("home") or "").strip())
         opponent = (match.get("away") or "").strip()
         odds_raw = match.get("odds") or {}
-        params   = match.get("params") or {}
 
         if not player:
             continue
