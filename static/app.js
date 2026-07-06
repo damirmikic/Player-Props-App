@@ -108,9 +108,8 @@ function renderLeagues(leagues) {
   }
   if (leagues.includes(current)) {
     leagueFilter.value = current;
-  } else {
-    const defaultLeague = leagues.includes("WNBA") ? "WNBA" : leagues[0];
-    if (defaultLeague) leagueFilter.value = defaultLeague;
+  } else if (leagues.length > 0) {
+    leagueFilter.value = leagues[0];
   }
 }
 
