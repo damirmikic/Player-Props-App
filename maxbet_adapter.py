@@ -127,10 +127,13 @@ def _build_game_strings(entries: list[dict]) -> dict[tuple[int, int], str]:
         sorted_teams = sorted(teams)
         if len(sorted_teams) == 2:
             game_strings[slot] = f"{sorted_teams[0]} @ {sorted_teams[1]}"
-        elif len(sorted_teams) == 1:
-            game_strings[slot] = sorted_teams[0]
         else:
-            game_strings[slot] = " @ ".join(sorted_teams[:2])
+            # 1 team (no opponent data) or 3+ teams (multiple simultaneous
+            # games sharing this slot, e.g. several FIBA qualifiers tipping
+            # off together) — pairing would be a guess and can cross-wire
+            # unrelated games. Leave unpaired; server.py's cross-source
+            # resolution fills in the real opponent from another bookmaker.
+            game_strings[slot] = ""
     return game_strings
 
 

@@ -9,7 +9,7 @@ Merkur encodes each match as a player-vs-opponent event (not a team matchup).
   params = {ouPlPoints: "19.5", ouPlAssists: "8.5", ...}
 
 Odd-ID → market mapping (same IDs used across all supported leagues):
-  51681 / 51679  Over / Under Points
+  51679 / 51681  Over / Under Points
   51682 / 51684  Over / Under Assists
   51685 / 51687  Over / Under Rebounds
   51688 / 51690  Over / Under 3-Pointers
@@ -75,7 +75,7 @@ _cache_lock = threading.Lock()
 
 # Maps (over_odd_id, under_odd_id) → market name
 MARKET_ODD_PAIRS = {
-    ("51681", "51679"): "points",
+    ("51679", "51681"): "points",
     ("51682", "51684"): "assists",
     ("51685", "51687"): "rebounds",
     ("51688", "51690"): "three_pointers",

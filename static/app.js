@@ -366,30 +366,6 @@ function setAllBooks(checked) {
   renderRows();
 }
 
-async function loadMozzartWatch() {
-  const el = document.querySelector("#mozzartWatchList");
-  if (!el) return;
-
-  try {
-    const response = await fetch("/api/mozzart-leagues");
-    if (!response.ok) throw new Error(`API returned ${response.status}`);
-
-    const payload = await response.json();
-    if (payload.error) {
-      el.textContent = "unavailable";
-      return;
-    }
-
-    const names = (payload.competitions || []).map((c) => c.name);
-    el.textContent = names.length ? names.join(", ") : "none currently";
-  } catch (error) {
-    el.textContent = "unavailable";
-    console.error(error);
-  } finally {
-    setTimeout(loadMozzartWatch, 300_000);
-  }
-}
-
 leagueFilter.addEventListener("change", onLeagueChange);
 matchFilter.addEventListener("change", renderRows);
 playerFilter.addEventListener("change", renderRows);
@@ -401,5 +377,4 @@ searchFilter.addEventListener("input", renderRows);
 refreshBtn.addEventListener("click", loadProps);
 
 setInterval(updateStatus, 1000);
-loadMozzartWatch();
 loadProps();
