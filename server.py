@@ -13,7 +13,7 @@ import superbet_adapter
 import stoiximan_adapter
 import maxbet_adapter
 from unabated_adapter import build_highlights
-from name_utils import to_canonical_name
+from name_utils import to_canonical_name, to_canonical_league
 
 
 ROOT = Path(__file__).resolve().parent
@@ -119,6 +119,11 @@ def load_all_props():
     # Re-normalize player names against the current alias table so that alias
     # changes take effect immediately without flushing adapter caches.
     all_records = [replace(r, player=to_canonical_name(r.player)) for r in all_records]
+
+    # Re-normalize league names against league_aliases.json so that the same
+    # competition appears under one canonical label regardless of which source
+    # named it (e.g. "Kvalifikacije SP" and "World Ch. Qual." → "FIBA Qualifiers").
+    all_records = [replace(r, league=to_canonical_league(r.league)) for r in all_records]
 
     # Strip gender markers (e.g. "(W)", "(M)") from all game strings so that
     # "Washington Mystics (W) @ Minnesota Lynx (W)" and

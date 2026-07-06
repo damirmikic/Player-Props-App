@@ -1,0 +1,9 @@
+{
+  "_comment": "Maps source-specific league names → canonical display names used throughout the UI.",
+  "_comment2": "Keys are the raw strings produced by adapters. Values are the canonical label.",
+  "_comment3": "This file is reloaded on every API request — no server restart needed.",
+
+  "Kvalifikacije SP":           "FIBA Qualifiers",
+  "World Ch. Qual.":            "FIBA Qualifiers",
+  "World Cup - Qual. America":  "FIBA Americas Qual."
+}

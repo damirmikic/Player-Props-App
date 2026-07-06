@@ -1,7 +1,7 @@
 """
-Shared player-name normalisation utilities.
+Shared player-name and league-name normalisation utilities.
 
-Canonical format: "Last F."   e.g.  "Boston A.",  "Clark C.",  "Van Lith H."
+Canonical player format: "Last F."   e.g.  "Boston A.",  "Clark C.",  "Van Lith H."
 
 Both adapters call `to_canonical_name()` so that every PropRecord ends up with
 the same player key regardless of source format:
@@ -9,9 +9,13 @@ the same player key regardless of source format:
   Unabated:  "Aliyah Boston"  → "Boston A."
   Merkur:    "Boston A."      → "Boston A."  (already canonical, no change)
 
-Edge cases that the pattern-based logic cannot handle are covered by the alias
-table in name_aliases.json.  Add entries there whenever a mismatch is spotted
-in the UI; the file is reloaded on every server restart.
+Edge cases for player names that the pattern-based logic cannot handle are
+covered by the alias table in name_aliases.json.
+
+League names vary across sources (e.g. Merkur calls it "Kvalifikacije SP"
+while MaxBet calls the same competition "World Ch. Qual."). Map them to a
+single canonical label via league_aliases.json.  Both files are reloaded on
+every API request — no server restart required.
 """
 from __future__ import annotations
 
@@ -19,13 +23,17 @@ import re
 import json
 from pathlib import Path
 
-_ALIAS_FILE = Path(__file__).resolve().parent / "name_aliases.json"
+_ALIAS_FILE        = Path(__file__).resolve().parent / "name_aliases.json"
+_LEAGUE_ALIAS_FILE = Path(__file__).resolve().parent / "league_aliases.json"
 
 # Matches Merkur's "Last F." format: one or more words, space, capital letter, period
 _CANONICAL_RE = re.compile(r'^.+\s+[A-Z]\.$')
 
 _aliases: dict | None = None
 _alias_mtime: float = 0.0
+
+_league_aliases: dict | None = None
+_league_alias_mtime: float = 0.0
 
 
 def load_aliases() -> dict:
@@ -53,6 +61,22 @@ def _get_aliases() -> dict:
         if _aliases is None:
             _aliases = {}
     return _aliases
+
+
+def _get_league_aliases() -> dict:
+    """Return the league alias table, reloading from disk if league_aliases.json changed."""
+    global _league_aliases, _league_alias_mtime
+    try:
+        mtime = _LEAGUE_ALIAS_FILE.stat().st_mtime
+        if _league_aliases is None or mtime != _league_alias_mtime:
+            data = json.loads(_LEAGUE_ALIAS_FILE.read_text(encoding="utf-8"))
+            # Strip comment keys so the JSON can carry _comment fields
+            _league_aliases = {k: v for k, v in data.items() if not k.startswith("_")}
+            _league_alias_mtime = mtime
+    except Exception:
+        if _league_aliases is None:
+            _league_aliases = {}
+    return _league_aliases
 
 
 def to_canonical_name(raw: str) -> str:
@@ -99,3 +123,26 @@ def to_canonical_name(raw: str) -> str:
         return f"{last} {first_initial}."
 
     return name
+
+
+def to_canonical_league(raw: str) -> str:
+    """
+    Map a source-specific league name to its canonical display label.
+
+    Reads league_aliases.json (hot-reloaded on every change, no restart needed).
+    If the name is not in the alias table it is returned unchanged so no data
+    is ever silently dropped.
+
+    Examples
+    --------
+    >>> to_canonical_league("Kvalifikacije SP")
+    'FIBA Qualifiers'
+    >>> to_canonical_league("World Ch. Qual.")
+    'FIBA Qualifiers'
+    >>> to_canonical_league("WNBA")
+    'WNBA'
+    """
+    name = raw.strip()
+    if not name:
+        return name
+    return _get_league_aliases().get(name, name)
