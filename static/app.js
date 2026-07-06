@@ -17,10 +17,60 @@ const propsHead = document.querySelector("#propsHead");
 const propsBody = document.querySelector("#propsBody");
 const statusEl = document.querySelector("#status");
 const refreshBtn = document.querySelector("#refreshBtn");
+const toastStack = document.querySelector("#toastStack");
 
 let _lastRowStatus = "";
 let _lastFetchedAt = null;
 let _refreshTimer = null;
+let _hasLoadedOnce = false;
+
+const TOAST_DURATION_MS = 6000;
+const MAX_TOASTS = 6;
+
+function showToast(record) {
+  const toast = document.createElement("div");
+  const kind = record.line_delta != null
+    ? "line"
+    : (record.over_odds_delta ?? record.under_odds_delta) > 0 ? "up" : "down";
+  toast.className = `toast toast-${kind}`;
+
+  const parts = [];
+  if (record.line_delta != null) {
+    const sign = record.line_delta > 0 ? "+" : "";
+    parts.push(`Line ${sign}${record.line_delta} → ${record.line.toFixed(1)}`);
+  }
+  if (record.over_odds_delta != null) {
+    const sign = record.over_odds_delta > 0 ? "+" : "";
+    parts.push(`Over ${sign}${record.over_odds_delta.toFixed(3)} → ${formatOdds(record.over_odds_decimal)}`);
+  }
+  if (record.under_odds_delta != null) {
+    const sign = record.under_odds_delta > 0 ? "+" : "";
+    parts.push(`Under ${sign}${record.under_odds_delta.toFixed(3)} → ${formatOdds(record.under_odds_decimal)}`);
+  }
+
+  toast.innerHTML = `
+    <div class="toast-title">${record.player} · ${titleCase(record.market.replace(/_/g, " "))}</div>
+    <div class="toast-detail">${record.bookmaker} — ${parts.join(" · ")}</div>
+  `;
+
+  toastStack.appendChild(toast);
+  while (toastStack.children.length > MAX_TOASTS) {
+    toastStack.removeChild(toastStack.firstChild);
+  }
+
+  setTimeout(() => {
+    toast.classList.add("toast-out");
+    toast.addEventListener("animationend", () => toast.remove(), { once: true });
+  }, TOAST_DURATION_MS);
+}
+
+function showMovementToasts(records) {
+  for (const record of records) {
+    if (record.line_delta != null || record.over_odds_delta != null || record.under_odds_delta != null) {
+      showToast(record);
+    }
+  }
+}
 
 function recordKey(record) {
   return `${record.player}|${record.market}|${record.bookmaker}|${record.line}`;
@@ -349,6 +399,9 @@ async function loadProps() {
     renderBookFilters();
     renderHead();
     renderRows();
+
+    if (_hasLoadedOnce) showMovementToasts(state.records);
+    _hasLoadedOnce = true;
   } catch (error) {
     statusEl.textContent = `${_lastRowStatus || "Error"} · unable to refresh`;
     console.error(error);
