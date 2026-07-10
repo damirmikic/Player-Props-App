@@ -443,6 +443,16 @@ thead .sticky-main {
   to { opacity: 0; transform: translateX(16px); }
 }
 
+.flash-name {
+  border-radius: 4px;
+  animation: flash-name 3.5s ease-out 4;
+}
+
+@keyframes flash-name {
+  0%, 100% { background: transparent; }
+  15% { background: #fde047; }
+}
+
 @media (max-width: 720px) {
   .topbar {
     align-items: stretch;

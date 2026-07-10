@@ -345,10 +345,13 @@ function renderRows() {
   propsBody.replaceChildren();
 
   for (const row of rows) {
+    const rowMoved = Object.values(row.books).some(
+      (r) => r.line_delta != null || r.over_odds_delta != null || r.under_odds_delta != null
+    );
     const tableRow = document.createElement("tr");
     tableRow.innerHTML = `
       <td class="sticky-main">
-        <strong>${row.player}</strong>
+        <strong class="${rowMoved ? "flash-name" : ""}">${row.player}</strong>
         ${row.team ? `<div class="muted">${row.team}</div>` : ""}
         <div class="game-name">vs ${row.game}</div>
         ${row.kickoff_time ? `<div class="muted match-time" style="font-size: 0.8em; margin-top: 2px;">🕒 ${new Date(row.kickoff_time).toLocaleDateString([], {day: '2-digit', month: '2-digit'})} ${new Date(row.kickoff_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>` : ""}
