@@ -110,6 +110,11 @@ def parse_unabated_props(raw):
             market = BET_TYPE_MARKETS.get(row.get("betTypeId"))
             if not market or row.get("periodTypeId") != 1 or row.get("betSubType") is not None:
                 continue
+            # statusId 1 = scheduled/upcoming; anything else means the event has
+            # already started, so drop it here as a fast pre-filter (kickoff-time
+            # based filtering in server.py catches whatever slips through).
+            if row.get("statusId") != 1:
+                continue
 
             player = player_name(people.get(str(row.get("personId")), {}))
             team = teams.get(str(row.get("teamId")), {})
