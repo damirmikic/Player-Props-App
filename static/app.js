@@ -351,7 +351,7 @@ function renderRows() {
         <strong>${row.player}</strong>
         ${row.team ? `<div class="muted">${row.team}</div>` : ""}
         <div class="game-name">vs ${row.game}</div>
-        ${row.kickoff_time ? `<div class="muted match-time" style="font-size: 0.8em; margin-top: 2px;">🕒 ${new Date(row.kickoff_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>` : ""}
+        ${row.kickoff_time ? `<div class="muted match-time" style="font-size: 0.8em; margin-top: 2px;">🕒 ${new Date(row.kickoff_time).toLocaleDateString([], {day: '2-digit', month: '2-digit'})} ${new Date(row.kickoff_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>` : ""}
       </td>
       <td>${titleCase(row.market.replace(/_/g, " "))}</td>
       ${renderBookCells(row)}

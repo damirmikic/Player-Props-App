@@ -16,6 +16,7 @@ EXCLUDED_BOOKMAKERS = {
     "caesars",
     "draftkings pick6",
     "fanatics",
+    "fanduel - delayed",
     "fliff",
     "hard rock",
     "hard rock (s)",

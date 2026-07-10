@@ -1,4 +1,5 @@
 from dataclasses import asdict, replace
+from datetime import datetime, timezone
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 import json
@@ -27,6 +28,19 @@ _snapshot_lock = threading.Lock()
 
 def _snapshot_key(r) -> str:
     return f"{r.player}|{r.market}|{r.bookmaker}"
+
+
+def _is_upcoming(r) -> bool:
+    """Keep records with no known kickoff time; drop games that have already started."""
+    if not r.kickoff_time:
+        return True
+    try:
+        kickoff = datetime.fromisoformat(r.kickoff_time.replace("Z", "+00:00"))
+    except ValueError:
+        return True
+    if kickoff.tzinfo is None:
+        kickoff = kickoff.replace(tzinfo=timezone.utc)
+    return kickoff >= datetime.now(timezone.utc)
 
 
 def _compute_deltas(records: list, prev: dict) -> dict:
@@ -186,6 +200,9 @@ def load_all_props():
             normalized_records.append(r)
             
     all_records = normalized_records
+
+    # Drop props for games that have already tipped off.
+    all_records = [r for r in all_records if _is_upcoming(r)]
 
     # All distinct leagues present in the merged dataset
     all_leagues = sorted({r.league for r in all_records})
