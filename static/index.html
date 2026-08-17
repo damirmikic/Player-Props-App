@@ -2,79 +2,91 @@
 <html lang="en">
   <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Player Props Odds Comparison</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>Player Props</title>
     <meta name="description" content="Live player prop odds comparison across multiple sportsbooks including Unabated and Merkur Xtip. Compare WNBA, ACB, Lega A and more player props side by side.">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏀</text></svg>">
     <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/styles.css">
   </head>
   <body>
-    <main class="app-shell">
-      <header class="topbar">
-        <div>
-          <p class="eyebrow">Multi-Book · Multi-League Odds Comparison</p>
+    <main class="app">
+
+      <!-- ===================== BOARD ===================== -->
+      <section class="screen" id="screen-board" data-active="true">
+        <header class="app-header">
           <h1>Player Props</h1>
-        </div>
-        <div class="refresh-area">
-          <button type="button" id="refreshBtn" class="refresh-btn" title="Refresh now">↻</button>
-          <div class="status" id="status">Loading…</div>
-        </div>
-      </header>
+          <p class="status-line" id="status">Loading&hellip;</p>
+        </header>
 
-      <div class="board-layout">
-        <section class="control-rail" aria-label="Board controls">
-          <div class="filter-grid">
-            <label>
-              League
-              <!-- Populated dynamically by app.js from /api/props -->
-              <select id="leagueFilter"></select>
-            </label>
-            <label>
-              Match
-              <select id="matchFilter">
-                <option value="all">All matches</option>
-              </select>
-            </label>
-            <label>
-              Player
-              <select id="playerFilter">
-                <option value="all">All players</option>
-              </select>
-            </label>
-            <label>
-              Market
-              <select id="marketFilter">
-                <option value="all">All markets</option>
-              </select>
-            </label>
-            <label>
-              Search
-              <input id="searchFilter" type="search" placeholder="Player, team, book…">
-            </label>
+        <div class="league-row" id="leagueRow" role="tablist" aria-label="League"></div>
+
+        <nav class="segmented" role="tablist" aria-label="View">
+          <button type="button" class="seg-btn" data-tab="board" role="tab" aria-selected="true">Board</button>
+          <button type="button" class="seg-btn" data-tab="watch" role="tab" aria-selected="false">Watchlist<span class="seg-count" id="watchCount"></span></button>
+          <button type="button" class="seg-btn" data-tab="alerts" role="tab" aria-selected="false">Alerts<span class="seg-count" id="alertCount"></span></button>
+        </nav>
+
+        <!-- Board panel -->
+        <div class="panel" id="panel-board">
+          <div class="market-row">
+            <div class="market-chips" id="marketRow"></div>
+            <button type="button" class="books-chip" id="booksChip">Books &middot; <span id="booksChipCount">0</span></button>
           </div>
-          <fieldset class="book-filter">
-            <div class="book-filter-head">
-              <legend>Bookmakers</legend>
-              <div class="book-actions">
-                <button type="button" id="selectAllBooks">All</button>
-                <button type="button" id="clearBooks">None</button>
-              </div>
-            </div>
-            <div class="book-list" id="bookFilter"></div>
-          </fieldset>
-        </section>
+          <div class="search-wrap">
+            <input type="search" id="searchInput" placeholder="Search player or team&hellip;" autocomplete="off">
+          </div>
+          <div class="card-list" id="boardList"></div>
+        </div>
 
-        <section class="table-wrap" aria-label="Comparative odds table">
-          <table id="oddsTable">
-            <thead id="propsHead"></thead>
-            <tbody id="propsBody"></tbody>
-          </table>
-        </section>
-      </div>
+        <!-- Watchlist panel -->
+        <div class="panel" id="panel-watch" hidden>
+          <div class="card-list" id="watchList"></div>
+        </div>
+
+        <!-- Alerts panel -->
+        <div class="panel" id="panel-alerts" hidden>
+          <div class="card-list" id="alertsList"></div>
+        </div>
+      </section>
+
+      <!-- ===================== DETAIL ===================== -->
+      <section class="screen screen-detail" id="screen-detail" hidden>
+        <header class="detail-header">
+          <button type="button" class="icon-btn" id="backBtn" aria-label="Back">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+          </button>
+          <div class="detail-title">
+            <h2 id="detailPlayer">&nbsp;</h2>
+            <p id="detailSubtitle">&nbsp;</p>
+          </div>
+          <button type="button" class="icon-btn star-btn" id="detailStar" aria-label="Toggle watchlist">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+          </button>
+        </header>
+
+        <div class="market-chips" id="detailMarketRow"></div>
+
+        <div class="card-list" id="detailList"></div>
+      </section>
+
+      <!-- ===================== BOOKMAKER SHEET ===================== -->
+      <div class="scrim" id="scrim" hidden></div>
+      <section class="sheet" id="bookSheet" hidden aria-label="Bookmakers">
+        <div class="sheet-handle"></div>
+        <div class="sheet-head">
+          <h3>Bookmakers</h3>
+          <div class="sheet-actions">
+            <button type="button" class="ghost-btn" id="booksAllBtn">All</button>
+            <button type="button" class="ghost-btn" id="booksNoneBtn">None</button>
+          </div>
+        </div>
+        <div class="sheet-list" id="bookSheetList"></div>
+        <button type="button" class="primary-btn" id="booksDoneBtn">Done</button>
+      </section>
     </main>
-
-    <div id="toastStack" class="toast-stack" aria-live="polite"></div>
 
     <script src="/app.js"></script>
   </body>

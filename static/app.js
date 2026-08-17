@@ -1,256 +1,147 @@
 const state = {
   records: [],
   highlights: {},
-  books: [],
   leagues: [],
+  markets: [],
+  league: null,
+  marketFilter: "all",
+  search: "",
+  activeBooks: new Set(),
+  tab: "board",
+  watchlist: loadWatchlist(),
+  alerts: loadAlerts(),
+  detailKey: null,
+  detailMarket: null,
 };
 
-const leagueFilter = document.querySelector("#leagueFilter");
-const matchFilter = document.querySelector("#matchFilter");
-const playerFilter = document.querySelector("#playerFilter");
-const marketFilter = document.querySelector("#marketFilter");
-const bookFilter = document.querySelector("#bookFilter");
-const selectAllBooks = document.querySelector("#selectAllBooks");
-const clearBooks = document.querySelector("#clearBooks");
-const searchFilter = document.querySelector("#searchFilter");
-const propsHead = document.querySelector("#propsHead");
-const propsBody = document.querySelector("#propsBody");
-const statusEl = document.querySelector("#status");
-const refreshBtn = document.querySelector("#refreshBtn");
-const toastStack = document.querySelector("#toastStack");
-
-let _lastRowStatus = "";
 let _lastFetchedAt = null;
-let _refreshTimer = null;
+let _lastStatusPrefix = "Loading…";
+let _pollTimer = null;
 let _hasLoadedOnce = false;
 
-const TOAST_DURATION_MS = 6000;
-const MAX_TOASTS = 6;
+const STAR_OUTLINE = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>';
 
-function showToast(record) {
-  const toast = document.createElement("div");
-  const kind = record.line_delta != null
-    ? "line"
-    : (record.over_odds_delta ?? record.under_odds_delta) > 0 ? "up" : "down";
-  toast.className = `toast toast-${kind}`;
+// ---------- persistence ----------
 
-  const parts = [];
-  if (record.line_delta != null) {
-    const sign = record.line_delta > 0 ? "+" : "";
-    parts.push(`Line ${sign}${record.line_delta} → ${record.line.toFixed(1)}`);
-  }
-  if (record.over_odds_delta != null) {
-    const sign = record.over_odds_delta > 0 ? "+" : "";
-    parts.push(`Over ${sign}${record.over_odds_delta.toFixed(3)} → ${formatOdds(record.over_odds_decimal)}`);
-  }
-  if (record.under_odds_delta != null) {
-    const sign = record.under_odds_delta > 0 ? "+" : "";
-    parts.push(`Under ${sign}${record.under_odds_delta.toFixed(3)} → ${formatOdds(record.under_odds_decimal)}`);
-  }
-
-  toast.innerHTML = `
-    <div class="toast-title">${record.player} · ${titleCase(record.market.replace(/_/g, " "))}</div>
-    <div class="toast-detail">${record.bookmaker} — ${parts.join(" · ")}</div>
-  `;
-
-  toastStack.appendChild(toast);
-  while (toastStack.children.length > MAX_TOASTS) {
-    toastStack.removeChild(toastStack.firstChild);
-  }
-
-  setTimeout(() => {
-    toast.classList.add("toast-out");
-    toast.addEventListener("animationend", () => toast.remove(), { once: true });
-  }, TOAST_DURATION_MS);
-}
-
-function showMovementToasts(records) {
-  for (const record of records) {
-    if (record.line_delta != null || record.over_odds_delta != null || record.under_odds_delta != null) {
-      showToast(record);
-    }
+function loadWatchlist() {
+  try {
+    const raw = localStorage.getItem("props_watchlist");
+    return new Set(raw ? JSON.parse(raw) : []);
+  } catch {
+    return new Set();
   }
 }
 
-function recordKey(record) {
-  return `${record.player}|${record.market}|${record.bookmaker}|${record.line}`;
+function saveWatchlist() {
+  localStorage.setItem("props_watchlist", JSON.stringify([...state.watchlist]));
+}
+
+function loadAlerts() {
+  try {
+    const raw = sessionStorage.getItem("props_alerts");
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveAlerts() {
+  sessionStorage.setItem("props_alerts", JSON.stringify(state.alerts.slice(0, 30)));
+}
+
+// ---------- helpers ----------
+
+function titleCase(value) {
+  return value.replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function marketLabel(market) {
+  return titleCase(market.replace(/_/g, " "));
+}
+
+function formatOdds(value) {
+  return value === null || value === undefined ? "–" : Number(value).toFixed(2);
 }
 
 function groupKey(record) {
   return `${record.player}|${record.market}`;
 }
 
-function titleCase(value) {
-  return value.replace(/\b\w/g, (char) => char.toUpperCase());
+function watchKey(player, market) {
+  return `${player}|${market}`;
 }
 
-function formatOdds(value) {
-  return value === null || value === undefined ? "-" : Number(value).toFixed(2);
-}
-
-function oddsArrow(delta) {
-  if (delta == null) return "";
-  return delta > 0
-    ? '<span class="move-up">↑</span>'
-    : '<span class="move-down">↓</span>';
-}
-
-function lineArrow(delta) {
-  if (delta == null) return "";
-  return delta > 0
-    ? '<span class="move-line">↑</span>'
-    : '<span class="move-line">↓</span>';
-}
-
-function updateStatus() {
-  if (!_lastFetchedAt) return;
-  const ageSec = Math.floor((Date.now() - _lastFetchedAt) / 1000);
-  const ageStr = ageSec < 60
-    ? `${ageSec}s ago`
-    : `${Math.floor(ageSec / 60)}m ${ageSec % 60}s ago`;
-  statusEl.textContent = `${_lastRowStatus} · ${ageStr}`;
+function recordKey(record) {
+  return `${record.player}|${record.market}|${record.bookmaker}|${record.line}`;
 }
 
 function uniqueSorted(values) {
   return [...new Set(values)].sort((a, b) => a.localeCompare(b));
 }
 
-function clearSelect(selectEl, firstLabel) {
-  selectEl.replaceChildren();
-  const option = document.createElement("option");
-  option.value = "all";
-  option.textContent = firstLabel;
-  selectEl.appendChild(option);
+function relativeTime(ts) {
+  const diff = Math.floor((Date.now() - ts) / 1000);
+  if (diff < 5) return "just now";
+  if (diff < 60) return `${diff}s ago`;
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  return `${Math.floor(diff / 3600)}h ago`;
 }
 
-function addOptions(selectEl, values) {
-  for (const value of values) {
-    const option = document.createElement("option");
-    option.value = value;
-    option.textContent = value;
-    selectEl.appendChild(option);
-  }
+function isBestOver(record) {
+  const h = state.highlights[groupKey(record)];
+  return !!h && h.best_over === recordKey(record);
 }
 
-function priceClass(record, side) {
-  const highlight = state.highlights[groupKey(record)];
-  if (!highlight) return "";
-
-  if (side === "over" && highlight.best_over === recordKey(record)) {
-    return "best-over";
-  }
-
-  if (side === "under" && highlight.best_under === recordKey(record)) {
-    return "best-under";
-  }
-
-  return "";
+function isBestUnder(record) {
+  const h = state.highlights[groupKey(record)];
+  return !!h && h.best_under === recordKey(record);
 }
 
-function renderLeagues(leagues) {
-  const current = leagueFilter.value;
-  leagueFilter.replaceChildren();
-  for (const league of leagues) {
-    const option = document.createElement("option");
-    option.value = league;
-    option.textContent = league;
-    leagueFilter.appendChild(option);
-  }
-  if (leagues.includes(current)) {
-    leagueFilter.value = current;
-  } else if (leagues.length > 0) {
-    leagueFilter.value = leagues[0];
-  }
+function hasMovement(record) {
+  return record.line_delta != null || record.over_odds_delta != null || record.under_odds_delta != null;
 }
 
-function renderMarkets(markets) {
-  const current = marketFilter.value;
-  clearSelect(marketFilter, "All markets");
-  for (const market of markets) {
-    const option = document.createElement("option");
-    option.value = market;
-    option.textContent = titleCase(market.replace(/_/g, " "));
-    marketFilter.appendChild(option);
-  }
-  if ([...marketFilter.options].some((o) => o.value === current)) {
-    marketFilter.value = current;
-  }
-}
+// ---------- DOM refs ----------
 
-function renderSelectors() {
-  const currentLeague = leagueFilter.value;
-  const currentMatch = matchFilter.value;
-  const currentPlayer = playerFilter.value;
-  const leagueRecords = state.records.filter((r) => r.league === currentLeague);
+const statusEl = document.querySelector("#status");
+const leagueRow = document.querySelector("#leagueRow");
+const marketRow = document.querySelector("#marketRow");
+const booksChip = document.querySelector("#booksChip");
+const booksChipCount = document.querySelector("#booksChipCount");
+const searchInput = document.querySelector("#searchInput");
+const boardList = document.querySelector("#boardList");
+const watchList = document.querySelector("#watchList");
+const alertsList = document.querySelector("#alertsList");
+const watchCountEl = document.querySelector("#watchCount");
+const alertCountEl = document.querySelector("#alertCount");
 
-  clearSelect(matchFilter, "All matches");
-  clearSelect(playerFilter, "All players");
-  addOptions(matchFilter, uniqueSorted(leagueRecords.map((r) => r.game)));
-  addOptions(playerFilter, uniqueSorted(leagueRecords.map((r) => r.player)));
+const screenBoard = document.querySelector("#screen-board");
+const screenDetail = document.querySelector("#screen-detail");
+const panelBoard = document.querySelector("#panel-board");
+const panelWatch = document.querySelector("#panel-watch");
+const panelAlerts = document.querySelector("#panel-alerts");
 
-  if ([...matchFilter.options].some((o) => o.value === currentMatch)) matchFilter.value = currentMatch;
-  if ([...playerFilter.options].some((o) => o.value === currentPlayer)) playerFilter.value = currentPlayer;
-}
+const backBtn = document.querySelector("#backBtn");
+const detailPlayer = document.querySelector("#detailPlayer");
+const detailSubtitle = document.querySelector("#detailSubtitle");
+const detailStar = document.querySelector("#detailStar");
+const detailMarketRow = document.querySelector("#detailMarketRow");
+const detailList = document.querySelector("#detailList");
 
-function selectedBooks() {
-  return [...bookFilter.querySelectorAll("input[type='checkbox']:checked")].map(
-    (input) => input.value
-  );
-}
+const scrim = document.querySelector("#scrim");
+const bookSheet = document.querySelector("#bookSheet");
+const bookSheetList = document.querySelector("#bookSheetList");
+const booksAllBtn = document.querySelector("#booksAllBtn");
+const booksNoneBtn = document.querySelector("#booksNoneBtn");
+const booksDoneBtn = document.querySelector("#booksDoneBtn");
 
-function renderBookFilters() {
-  const currentLeague = leagueFilter.value;
-  const unchecked = new Set(
-    [...bookFilter.querySelectorAll("input[type='checkbox']:not(:checked)")].map((i) => i.value)
-  );
-  const hadState = bookFilter.querySelector("input") !== null;
-
-  const leagueBooks = uniqueSorted(
-    state.records
-      .filter((r) => r.league === currentLeague)
-      .map((r) => r.bookmaker)
-  );
-
-  bookFilter.replaceChildren();
-  for (const book of leagueBooks) {
-    const label = document.createElement("label");
-    label.className = "check-row";
-    const checked = !hadState || !unchecked.has(book);
-    label.innerHTML = `
-      <input type="checkbox" value="${book}" ${checked ? "checked" : ""}>
-      <span>${book}</span>
-    `;
-    bookFilter.appendChild(label);
-  }
-}
-
-function filteredRecords() {
-  const selectedLeague = leagueFilter.value;
-  const selectedMatch = matchFilter.value;
-  const selectedPlayer = playerFilter.value;
-  const selectedMarket = marketFilter.value;
-  const activeBooks = selectedBooks();
-  const query = searchFilter.value.trim().toLowerCase();
-
-  return state.records.filter((record) => {
-    const leagueMatch = record.league === selectedLeague;
-    const matchMatch = selectedMatch === "all" || record.game === selectedMatch;
-    const playerMatch = selectedPlayer === "all" || record.player === selectedPlayer;
-    const marketMatch = selectedMarket === "all" || record.market === selectedMarket;
-    const bookMatch = activeBooks.includes(record.bookmaker);
-    const haystack = `${record.player} ${record.team} ${record.game} ${record.bookmaker}`.toLowerCase();
-    return leagueMatch && matchMatch && playerMatch && marketMatch && bookMatch && haystack.includes(query);
-  });
-}
+// ---------- data grouping ----------
 
 function comparisonKey(record) {
-  // Intentionally excludes game: different sources format game strings differently
-  // (Unabated: "Away @ Home", Merkur: "Home team only"). Using player+market
-  // as the key ensures they land in the same comparison row.
   return `${record.player}|${record.market}`;
 }
 
-function buildComparisonRows(records) {
+function buildGroups(records) {
   const rows = new Map();
   for (const record of records) {
     const key = comparisonKey(record);
@@ -265,41 +156,130 @@ function buildComparisonRows(records) {
       });
     }
     const row = rows.get(key);
-    // Prefer the more descriptive game string (Unabated has full "Away @ Home")
     if (record.game && record.game.length > row.game.length) row.game = record.game;
-    // Prefer non-empty team abbreviation (Merkur doesn't carry player team)
     if (!row.team && record.team) row.team = record.team;
-    // Prefer non-empty kickoff time
     if (!row.kickoff_time && record.kickoff_time) row.kickoff_time = record.kickoff_time;
     row.books[record.bookmaker] = record;
   }
-
   return [...rows.values()].sort((a, b) => {
-    const playerSort = a.player.localeCompare(b.player);
-    if (playerSort !== 0) return playerSort;
-    return a.market.localeCompare(b.market);
+    const p = a.player.localeCompare(b.player);
+    return p !== 0 ? p : a.market.localeCompare(b.market);
   });
 }
 
-function renderHead() {
-  const activeBooks = selectedBooks();
+function leagueBooks(league) {
+  return uniqueSorted(state.records.filter((r) => r.league === league).map((r) => r.bookmaker));
+}
 
-  const bookHeaders = activeBooks
-    .map((book) => `<th class="book-head">${book}</th>`)
-    .join("");
+// ---------- board rendering ----------
 
-  propsHead.innerHTML = `
-    <tr>
-      <th class="sticky-main">Player</th>
-      <th>Market</th>
-      ${bookHeaders}
-    </tr>
+function renderLeagueRow() {
+  leagueRow.replaceChildren();
+  for (const league of state.leagues) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "league-chip";
+    btn.textContent = league;
+    btn.setAttribute("role", "tab");
+    btn.setAttribute("aria-selected", String(league === state.league));
+    btn.addEventListener("click", () => selectLeague(league));
+    leagueRow.appendChild(btn);
+  }
+}
+
+function selectLeague(league) {
+  if (league === state.league) return;
+  state.league = league;
+  state.marketFilter = "all";
+  state.activeBooks = new Set(leagueBooks(league));
+  renderLeagueRow();
+  renderMarketRow();
+  renderBoard();
+}
+
+function renderMarketRow() {
+  const markets = uniqueSorted(
+    state.records.filter((r) => r.league === state.league).map((r) => r.market)
+  );
+  marketRow.replaceChildren();
+
+  const allChip = document.createElement("button");
+  allChip.type = "button";
+  allChip.className = "market-chip";
+  allChip.textContent = "All markets";
+  allChip.setAttribute("aria-selected", String(state.marketFilter === "all"));
+  allChip.addEventListener("click", () => {
+    state.marketFilter = "all";
+    renderMarketRow();
+    renderBoard();
+  });
+  marketRow.appendChild(allChip);
+
+  for (const market of markets) {
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = "market-chip";
+    chip.textContent = marketLabel(market);
+    chip.setAttribute("aria-selected", String(state.marketFilter === market));
+    chip.addEventListener("click", () => {
+      state.marketFilter = market;
+      renderMarketRow();
+      renderBoard();
+    });
+    marketRow.appendChild(chip);
+  }
+
+  booksChipCount.textContent = state.activeBooks.size;
+}
+
+function filteredBoardRecords() {
+  const query = state.search.trim().toLowerCase();
+  return state.records.filter((r) => {
+    if (r.league !== state.league) return false;
+    if (state.marketFilter !== "all" && r.market !== state.marketFilter) return false;
+    if (!state.activeBooks.has(r.bookmaker)) return false;
+    if (!query) return true;
+    return `${r.player} ${r.team}`.toLowerCase().includes(query);
+  });
+}
+
+function bookCellHtml(book, record, consensus) {
+  if (!record) {
+    return `
+      <div class="book-cell">
+        <div class="book-cell-head">${book}</div>
+        <div class="pill-row"><span class="price-pill empty">–</span></div>
+      </div>
+    `;
+  }
+
+  const overBest = isBestOver(record) ? " best" : "";
+  const underBest = isBestUnder(record) ? " best" : "";
+  const overDelta = record.over_odds_delta != null
+    ? `<span class="delta ${record.over_odds_delta > 0 ? "up" : "down"}">${record.over_odds_delta > 0 ? "↑" : "↓"}</span>`
+    : "";
+  const underDelta = record.under_odds_delta != null
+    ? `<span class="delta ${record.under_odds_delta > 0 ? "up" : "down"}">${record.under_odds_delta > 0 ? "↑" : "↓"}</span>`
+    : "";
+  const lineDelta = record.line_delta != null
+    ? `<span class="line-delta ${record.line_delta > 0 ? "delta up" : "delta down"}">${record.line_delta > 0 ? "+" : ""}${record.line_delta} → ${record.line.toFixed(1)}</span>`
+    : "";
+  const lineDiff = consensus != null && record.line !== consensus;
+
+  return `
+    <div class="book-cell${lineDiff ? " line-diff" : ""}">
+      <div class="book-cell-head"><span>${book} &middot; ${record.line.toFixed(1)}</span>${lineDelta}</div>
+      <div class="pill-row">
+        <span class="price-pill${overBest}">O ${formatOdds(record.over_odds_decimal)}${overDelta}</span>
+        <span class="price-pill${underBest}">U ${formatOdds(record.under_odds_decimal)}${underDelta}</span>
+      </div>
+    </div>
   `;
 }
 
-function consensusLine(row, activeBooks) {
+function consensusLine(row, books) {
   const counts = new Map();
-  for (const book of activeBooks) {
+  for (const book of books) {
     const line = row.books[book]?.line;
     if (line !== undefined) counts.set(line, (counts.get(line) ?? 0) + 1);
   }
@@ -310,127 +290,404 @@ function consensusLine(row, activeBooks) {
   return best;
 }
 
-function renderBookCells(row) {
-  const activeBooks = selectedBooks();
-  const consensus = consensusLine(row, activeBooks);
+function propCardHtml(row) {
+  const moved = Object.values(row.books).some(hasMovement);
+  const key = watchKey(row.player, row.market);
+  const isStarred = state.watchlist.has(key);
+  const books = [...state.activeBooks].filter((b) => row.books[b]).length
+    ? [...state.activeBooks]
+    : Object.keys(row.books);
 
-  return activeBooks
-    .map((book) => {
-      const record = row.books[book];
-      if (!record) {
-        return '<td class="empty book-cell">-</td>';
-      }
+  const consensus = consensusLine(row, books);
+  const cells = books.map((book) => bookCellHtml(book, row.books[book], consensus)).join("");
 
-      const diffClass = record.line !== consensus ? " line-diff" : "";
+  return `
+    <article class="prop-card" data-player="${escapeAttr(row.player)}" data-market="${escapeAttr(row.market)}">
+      <div class="prop-card-top">
+        <div class="prop-card-meta">
+          <p class="prop-name${moved ? " flash" : ""}">${row.player}</p>
+          <p class="prop-subline">${row.team ? row.team + " &middot; " : ""}${marketLabel(row.market)}</p>
+          <p class="prop-game">vs ${row.game}</p>
+        </div>
+        ${consensus != null ? `<span class="consensus-chip">Consensus ${consensus.toFixed(1)}</span>` : ""}
+        <button type="button" class="star-toggle" data-active="${isStarred}" aria-label="Toggle watchlist">${STAR_OUTLINE}</button>
+      </div>
+      <div class="book-grid">${cells}</div>
+    </article>
+  `;
+}
 
+function escapeAttr(value) {
+  return String(value).replace(/"/g, "&quot;");
+}
+
+function renderBoard() {
+  const rows = buildGroups(filteredBoardRecords());
+  booksChipCount.textContent = state.activeBooks.size;
+
+  if (rows.length === 0) {
+    boardList.innerHTML = `<div class="empty-state">No props match your filters.</div>`;
+    return;
+  }
+
+  boardList.innerHTML = rows.map(propCardHtml).join("");
+}
+
+// ---------- watchlist panel ----------
+
+function renderWatchlist() {
+  const entries = [...state.watchlist].map((key) => {
+    const [player, market] = key.split("|");
+    const records = state.records.filter((r) => r.player === player && r.market === market);
+    return { key, player, market, records };
+  }).filter((e) => e.records.length > 0 || state.watchlist.has(e.key));
+
+  entries.sort((a, b) => a.player.localeCompare(b.player));
+
+  if (entries.length === 0) {
+    watchList.innerHTML = `<div class="empty-state">Tap the star on any prop to track it here.</div>`;
+    return;
+  }
+
+  watchList.innerHTML = entries.map((e) => {
+    const overs = e.records.map((r) => r.over_odds_decimal).filter((v) => v != null);
+    const unders = e.records.map((r) => r.under_odds_decimal).filter((v) => v != null);
+    const bestOver = overs.length ? Math.max(...overs) : null;
+    const bestUnder = unders.length ? Math.max(...unders) : null;
+    const summary = `${marketLabel(e.market)} · Best O ${formatOdds(bestOver)} / U ${formatOdds(bestUnder)}`;
+
+    return `
+      <article class="watch-row" data-player="${escapeAttr(e.player)}" data-market="${escapeAttr(e.market)}">
+        <div class="watch-row-meta">
+          <p class="watch-row-name">${e.player}</p>
+          <p class="watch-row-detail">${summary}</p>
+        </div>
+        <button type="button" class="star-toggle" data-active="true" aria-label="Remove from watchlist">${STAR_OUTLINE}</button>
+      </article>
+    `;
+  }).join("");
+}
+
+// ---------- alerts panel ----------
+
+function renderAlerts() {
+  if (state.alerts.length === 0) {
+    alertsList.innerHTML = `<div class="empty-state">No line or odds movement yet&hellip;</div>`;
+    return;
+  }
+
+  alertsList.innerHTML = state.alerts.map((a) => `
+    <article class="alert-card" data-player="${escapeAttr(a.player)}" data-market="${escapeAttr(a.market)}">
+      <div class="alert-top">
+        <span>${a.player} &middot; ${marketLabel(a.market)}</span>
+        <span class="alert-time">${relativeTime(a.when)}</span>
+      </div>
+      <p class="alert-detail">${a.book} — ${a.detail}</p>
+    </article>
+  `).join("");
+}
+
+function pushAlert(entry) {
+  state.alerts.unshift(entry);
+  state.alerts = state.alerts.slice(0, 30);
+  saveAlerts();
+}
+
+function collectMovementAlerts(records) {
+  const now = Date.now();
+  for (const r of records) {
+    if (r.line_delta != null) {
+      const sign = r.line_delta > 0 ? "+" : "";
+      pushAlert({
+        player: r.player,
+        market: r.market,
+        book: r.bookmaker,
+        detail: `Line ${sign}${r.line_delta} → ${r.line.toFixed(1)}`,
+        when: now,
+      });
+    }
+    if (r.over_odds_delta != null) {
+      const sign = r.over_odds_delta > 0 ? "+" : "";
+      pushAlert({
+        player: r.player,
+        market: r.market,
+        book: r.bookmaker,
+        detail: `Over ${sign}${r.over_odds_delta.toFixed(3)} → ${formatOdds(r.over_odds_decimal)}`,
+        when: now,
+      });
+    }
+    if (r.under_odds_delta != null) {
+      const sign = r.under_odds_delta > 0 ? "+" : "";
+      pushAlert({
+        player: r.player,
+        market: r.market,
+        book: r.bookmaker,
+        detail: `Under ${sign}${r.under_odds_delta.toFixed(3)} → ${formatOdds(r.under_odds_decimal)}`,
+        when: now,
+      });
+    }
+  }
+}
+
+// ---------- tabs / counts ----------
+
+function renderCounts() {
+  watchCountEl.textContent = state.watchlist.size ? `(${state.watchlist.size})` : "";
+  alertCountEl.textContent = state.alerts.length ? `(${state.alerts.length})` : "";
+}
+
+function setTab(tab) {
+  state.tab = tab;
+  for (const btn of document.querySelectorAll(".seg-btn")) {
+    btn.setAttribute("aria-selected", String(btn.dataset.tab === tab));
+  }
+  panelBoard.hidden = tab !== "board";
+  panelWatch.hidden = tab !== "watch";
+  panelAlerts.hidden = tab !== "alerts";
+
+  if (tab === "watch") renderWatchlist();
+  if (tab === "alerts") renderAlerts();
+}
+
+// ---------- detail screen ----------
+
+function openDetail(player, market) {
+  state.detailKey = player;
+  state.detailMarket = market;
+  screenBoard.hidden = true;
+  screenDetail.hidden = false;
+  renderDetail();
+}
+
+function closeDetail() {
+  screenDetail.hidden = true;
+  screenBoard.hidden = false;
+}
+
+function renderDetail() {
+  const player = state.detailKey;
+  const playerRecords = state.records.filter(
+    (r) => r.player === player && r.league === state.league
+  );
+  if (playerRecords.length === 0) {
+    // fall back to any league match if the player isn't in the current league view
+    const anyLeagueRecords = state.records.filter((r) => r.player === player);
+    if (anyLeagueRecords.length > 0) {
+      state.league = anyLeagueRecords[0].league;
+    }
+  }
+
+  const records = state.records.filter((r) => r.player === player && r.league === state.league);
+  const markets = uniqueSorted(records.map((r) => r.market));
+  if (!markets.includes(state.detailMarket) && markets.length > 0) {
+    state.detailMarket = markets[0];
+  }
+
+  const marketRecords = records.filter((r) => r.market === state.detailMarket);
+  const game = marketRecords[0]?.game || "";
+  const team = marketRecords[0]?.team || "";
+
+  detailPlayer.textContent = player;
+  detailSubtitle.textContent = [team, game].filter(Boolean).join(" · ");
+
+  const isStarred = state.watchlist.has(watchKey(player, state.detailMarket));
+  detailStar.setAttribute("data-active", String(isStarred));
+
+  detailMarketRow.innerHTML = markets.map((m) => `
+    <button type="button" class="market-chip" data-market="${escapeAttr(m)}" aria-selected="${m === state.detailMarket}">${marketLabel(m)}</button>
+  `).join("");
+
+  if (marketRecords.length === 0) {
+    detailList.innerHTML = `<div class="empty-state">No books currently cover this market.</div>`;
+    return;
+  }
+
+  detailList.innerHTML = marketRecords
+    .sort((a, b) => a.bookmaker.localeCompare(b.bookmaker))
+    .map((r) => {
+      const overBest = isBestOver(r) ? " best" : "";
+      const underBest = isBestUnder(r) ? " best" : "";
       return `
-        <td class="book-cell">
-          <div class="odds-stack">
-            <div class="line-val${diffClass}"><span class="line-label">Line</span> ${record.line.toFixed(1)}${lineArrow(record.line_delta)}</div>
-            <div class="odds-row">
-              <span class="price ${priceClass(record, "over")}">O: ${formatOdds(record.over_odds_decimal)}${oddsArrow(record.over_odds_delta)}</span>
-              <span class="price ${priceClass(record, "under")}">U: ${formatOdds(record.under_odds_decimal)}${oddsArrow(record.under_odds_delta)}</span>
-            </div>
+        <div class="detail-row">
+          <div class="detail-row-top">
+            <span class="detail-row-book">${r.bookmaker}</span>
+            <span class="detail-row-line">Line ${r.line.toFixed(1)}</span>
           </div>
-        </td>
+          <div class="pill-row">
+            <span class="price-pill${overBest}">O ${formatOdds(r.over_odds_decimal)}</span>
+            <span class="price-pill${underBest}">U ${formatOdds(r.under_odds_decimal)}</span>
+          </div>
+        </div>
       `;
     })
     .join("");
 }
 
-function renderRows() {
-  const rows = buildComparisonRows(filteredRecords());
+// ---------- bookmaker sheet ----------
 
-  renderHead();
-  propsBody.replaceChildren();
-
-  for (const row of rows) {
-    const rowMoved = Object.values(row.books).some(
-      (r) => r.line_delta != null || r.over_odds_delta != null || r.under_odds_delta != null
-    );
-    const tableRow = document.createElement("tr");
-    tableRow.innerHTML = `
-      <td class="sticky-main">
-        <strong class="${rowMoved ? "flash-name" : ""}">${row.player}</strong>
-        ${row.team ? `<div class="muted">${row.team}</div>` : ""}
-        <div class="game-name">vs ${row.game}</div>
-        ${row.kickoff_time ? `<div class="muted match-time" style="font-size: 0.8em; margin-top: 2px;">🕒 ${new Date(row.kickoff_time).toLocaleDateString([], {day: '2-digit', month: '2-digit'})} ${new Date(row.kickoff_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>` : ""}
-      </td>
-      <td>${titleCase(row.market.replace(/_/g, " "))}</td>
-      ${renderBookCells(row)}
-    `;
-    propsBody.appendChild(tableRow);
-  }
-
-  const league = leagueFilter.value;
-  const movedCount = rows.filter((row) =>
-    Object.values(row.books).some(
-      (r) => r.line_delta != null || r.over_odds_delta != null || r.under_odds_delta != null
-    )
-  ).length;
-  _lastRowStatus =
-    `${rows.length} comparisons · ${league}` +
-    (movedCount ? ` · ${movedCount} moved` : "");
-  updateStatus();
+function openBookSheet() {
+  const books = leagueBooks(state.league);
+  bookSheetList.innerHTML = books.map((book) => `
+    <label class="sheet-check-row">
+      <input type="checkbox" value="${escapeAttr(book)}" ${state.activeBooks.has(book) ? "checked" : ""}>
+      <span>${book}</span>
+    </label>
+  `).join("");
+  scrim.hidden = false;
+  bookSheet.hidden = false;
 }
 
-function onLeagueChange() {
-  // Refresh selectors and book filters for the newly chosen league
-  renderSelectors();
-  renderBookFilters();
-  renderRows();
+function closeBookSheet() {
+  state.activeBooks = new Set(
+    [...bookSheetList.querySelectorAll("input:checked")].map((i) => i.value)
+  );
+  scrim.hidden = true;
+  bookSheet.hidden = true;
+  renderMarketRow();
+  renderBoard();
+}
+
+// ---------- polling ----------
+
+function updateStatusLine() {
+  if (!_lastFetchedAt) return;
+  const ageSec = Math.floor((Date.now() - _lastFetchedAt) / 1000);
+  const ageStr = ageSec < 60 ? `${ageSec}s ago` : `${Math.floor(ageSec / 60)}m ago`;
+  statusEl.textContent = `${_lastStatusPrefix} · updated ${ageStr}`;
 }
 
 async function loadProps() {
-  refreshBtn.disabled = true;
-  refreshBtn.classList.add("loading");
-  clearTimeout(_refreshTimer);
-
+  clearTimeout(_pollTimer);
   try {
     const response = await fetch("/api/props");
     if (!response.ok) throw new Error(`API returned ${response.status}`);
-
     const payload = await response.json();
-    state.records = payload.records;
-    state.highlights = payload.highlights;
-    state.leagues = payload.leagues || ["WNBA"];
+
+    state.records = payload.records || [];
+    state.highlights = payload.highlights || {};
+    state.leagues = payload.leagues || [];
+    state.markets = payload.markets || [];
+
+    if (!state.league || !state.leagues.includes(state.league)) {
+      state.league = state.leagues[0] || null;
+      state.activeBooks = new Set(leagueBooks(state.league));
+    } else if (state.activeBooks.size === 0) {
+      state.activeBooks = new Set(leagueBooks(state.league));
+    }
+
     _lastFetchedAt = Date.now();
+    const leagueRecords = state.records.filter((r) => r.league === state.league);
+    _lastStatusPrefix = `${leagueRecords.length} records · ${state.league || "–"}`;
 
-    renderLeagues(state.leagues);
-    renderMarkets(payload.markets);
-    renderSelectors();
-    renderBookFilters();
-    renderHead();
-    renderRows();
+    renderLeagueRow();
+    renderMarketRow();
+    renderBoard();
+    renderCounts();
+    if (state.tab === "watch") renderWatchlist();
+    if (state.tab === "alerts") renderAlerts();
+    if (!screenDetail.hidden) renderDetail();
 
-    if (_hasLoadedOnce) showMovementToasts(state.records);
+    if (_hasLoadedOnce) {
+      collectMovementAlerts(state.records);
+      renderCounts();
+      if (state.tab === "alerts") renderAlerts();
+    }
     _hasLoadedOnce = true;
+    updateStatusLine();
   } catch (error) {
-    statusEl.textContent = `${_lastRowStatus || "Error"} · unable to refresh`;
+    statusEl.textContent = "Unable to refresh";
     console.error(error);
   } finally {
-    refreshBtn.disabled = false;
-    refreshBtn.classList.remove("loading");
-    _refreshTimer = setTimeout(loadProps, 30_000);
+    _pollTimer = setTimeout(loadProps, 30_000);
   }
 }
 
-function setAllBooks(checked) {
-  for (const input of bookFilter.querySelectorAll("input[type='checkbox']")) {
-    input.checked = checked;
+// ---------- event wiring ----------
+
+document.querySelectorAll(".seg-btn").forEach((btn) => {
+  btn.addEventListener("click", () => setTab(btn.dataset.tab));
+});
+
+searchInput.addEventListener("input", (e) => {
+  state.search = e.target.value;
+  renderBoard();
+});
+
+boardList.addEventListener("click", (e) => {
+  const starBtn = e.target.closest(".star-toggle");
+  const card = e.target.closest(".prop-card");
+  if (!card) return;
+  const player = card.dataset.player;
+  const market = card.dataset.market;
+
+  if (starBtn) {
+    e.stopPropagation();
+    const key = watchKey(player, market);
+    if (state.watchlist.has(key)) state.watchlist.delete(key);
+    else state.watchlist.add(key);
+    saveWatchlist();
+    renderCounts();
+    renderBoard();
+    return;
   }
-  renderRows();
-}
 
-leagueFilter.addEventListener("change", onLeagueChange);
-matchFilter.addEventListener("change", renderRows);
-playerFilter.addEventListener("change", renderRows);
-marketFilter.addEventListener("change", renderRows);
-bookFilter.addEventListener("change", renderRows);
-selectAllBooks.addEventListener("click", () => setAllBooks(true));
-clearBooks.addEventListener("click", () => setAllBooks(false));
-searchFilter.addEventListener("input", renderRows);
-refreshBtn.addEventListener("click", loadProps);
+  openDetail(player, market);
+});
 
-setInterval(updateStatus, 1000);
+watchList.addEventListener("click", (e) => {
+  const row = e.target.closest(".watch-row");
+  if (!row) return;
+  const player = row.dataset.player;
+  const market = row.dataset.market;
+  const starBtn = e.target.closest(".star-toggle");
+
+  if (starBtn) {
+    e.stopPropagation();
+    state.watchlist.delete(watchKey(player, market));
+    saveWatchlist();
+    renderCounts();
+    renderWatchlist();
+    return;
+  }
+
+  openDetail(player, market);
+});
+
+alertsList.addEventListener("click", (e) => {
+  const card = e.target.closest(".alert-card");
+  if (!card) return;
+  openDetail(card.dataset.player, card.dataset.market);
+});
+
+backBtn.addEventListener("click", closeDetail);
+
+detailStar.addEventListener("click", () => {
+  const key = watchKey(state.detailKey, state.detailMarket);
+  if (state.watchlist.has(key)) state.watchlist.delete(key);
+  else state.watchlist.add(key);
+  saveWatchlist();
+  renderCounts();
+  detailStar.setAttribute("data-active", String(state.watchlist.has(key)));
+});
+
+detailMarketRow.addEventListener("click", (e) => {
+  const chip = e.target.closest(".market-chip");
+  if (!chip) return;
+  state.detailMarket = chip.dataset.market;
+  renderDetail();
+});
+
+booksChip.addEventListener("click", openBookSheet);
+scrim.addEventListener("click", closeBookSheet);
+booksDoneBtn.addEventListener("click", closeBookSheet);
+
+booksAllBtn.addEventListener("click", () => {
+  bookSheetList.querySelectorAll("input").forEach((i) => (i.checked = true));
+});
+booksNoneBtn.addEventListener("click", () => {
+  bookSheetList.querySelectorAll("input").forEach((i) => (i.checked = false));
+});
+
+setInterval(updateStatusLine, 1000);
+renderCounts();
 loadProps();
