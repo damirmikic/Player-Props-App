@@ -2,3 +2,10 @@ __pycache__/
 *.pyc
 unabated_*.json
 *_cache.json
+
+# Local Netlify folder
+.netlify
+deno.lock
+
+# Node
+node_modules/

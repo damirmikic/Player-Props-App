@@ -1,0 +1,13 @@
+[build]
+  publish = "static"
+  functions = "netlify/functions"
+
+[[redirects]]
+  from = "/api/props"
+  to = "/.netlify/functions/props"
+  status = 200
+
+[[redirects]]
+  from = "/api/mozzart-leagues"
+  to = "/.netlify/functions/mozzart-leagues"
+  status = 200
