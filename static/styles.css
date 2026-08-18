@@ -148,6 +148,8 @@ button, input {
 /* ---------- Match select ---------- */
 
 .match-row {
+  /* Temporarily hidden — remove this rule to bring the match selector back. */
+  display: none;
   padding: 0 16px 12px;
 }
 
