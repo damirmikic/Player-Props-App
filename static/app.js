@@ -5,6 +5,7 @@ const state = {
   markets: [],
   league: null,
   marketFilter: "all",
+  matchFilter: "all",
   search: "",
   activeBooks: new Set(),
   tab: "board",
@@ -146,6 +147,7 @@ function hasMovement(record) {
 
 const statusEl = document.querySelector("#status");
 const leagueRow = document.querySelector("#leagueRow");
+const matchSelect = document.querySelector("#matchSelect");
 const marketRow = document.querySelector("#marketRow");
 const booksChip = document.querySelector("#booksChip");
 const booksChipCount = document.querySelector("#booksChipCount");
@@ -240,10 +242,37 @@ function selectLeague(league) {
   if (league === state.league) return;
   state.league = league;
   state.marketFilter = "all";
+  state.matchFilter = "all";
   state.activeBooks = new Set(leagueBooks(league));
   renderLeagueRow();
+  renderMatchSelect();
   renderMarketRow();
   renderBoard();
+}
+
+function leagueMatches(league) {
+  return uniqueSorted(state.records.filter((r) => r.league === league && r.game).map((r) => r.game));
+}
+
+function renderMatchSelect() {
+  const matches = leagueMatches(state.league);
+  const current = state.matchFilter;
+
+  matchSelect.replaceChildren();
+  const allOption = document.createElement("option");
+  allOption.value = "all";
+  allOption.textContent = "All matches";
+  matchSelect.appendChild(allOption);
+
+  for (const match of matches) {
+    const option = document.createElement("option");
+    option.value = match;
+    option.textContent = match;
+    matchSelect.appendChild(option);
+  }
+
+  matchSelect.value = matches.includes(current) ? current : "all";
+  state.matchFilter = matchSelect.value;
 }
 
 function renderMarketRow() {
@@ -285,6 +314,7 @@ function filteredBoardRecords() {
   const query = state.search.trim().toLowerCase();
   return state.records.filter((r) => {
     if (r.league !== state.league) return false;
+    if (state.matchFilter !== "all" && r.game !== state.matchFilter) return false;
     if (state.marketFilter !== "all" && r.market !== state.marketFilter) return false;
     if (!state.activeBooks.has(r.bookmaker)) return false;
     if (!query) return true;
@@ -686,6 +716,7 @@ async function loadProps() {
     _lastStatusPrefix = `${leagueRecords.length} records · ${state.league || "–"}`;
 
     renderLeagueRow();
+    renderMatchSelect();
     renderMarketRow();
     renderBoard();
     renderCounts();
@@ -717,6 +748,11 @@ document.querySelectorAll(".seg-btn").forEach((btn) => {
 
 searchInput.addEventListener("input", (e) => {
   state.search = e.target.value;
+  renderBoard();
+});
+
+matchSelect.addEventListener("change", (e) => {
+  state.matchFilter = e.target.value;
   renderBoard();
 });
 

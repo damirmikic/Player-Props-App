@@ -145,6 +145,28 @@ button, input {
   color: #fff;
 }
 
+/* ---------- Match select ---------- */
+
+.match-row {
+  padding: 0 16px 12px;
+}
+
+#matchSelect {
+  width: 100%;
+  border: 2px solid var(--color-divider);
+  background: var(--color-surface);
+  color: var(--color-text);
+  padding: 10px 12px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+#matchSelect:focus {
+  outline: none;
+  border-color: var(--color-accent);
+}
+
 /* ---------- Segmented control ---------- */
 
 .segmented {
@@ -762,6 +784,16 @@ button, input {
 
   .league-chip {
     padding: 9px 20px;
+    font-size: 14px;
+  }
+
+  .match-row {
+    padding: 0 32px 16px;
+    max-width: 420px;
+  }
+
+  #matchSelect {
+    padding: 11px 14px;
     font-size: 14px;
   }
 
