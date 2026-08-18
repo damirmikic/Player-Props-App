@@ -141,6 +141,10 @@ def load_all_props():
         + stoiximan_records + maxbet_records + mozzart_records
     )
 
+    # Temporarily hidden markets — pull back out once ready to show them again.
+    _HIDDEN_MARKETS = {"three_pointers", "tpra"}
+    all_records = [r for r in all_records if r.market not in _HIDDEN_MARKETS]
+
     # Re-normalize player names against the current alias table so that alias
     # changes take effect immediately without flushing adapter caches.
     all_records = [replace(r, player=to_canonical_name(r.player)) for r in all_records]

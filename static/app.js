@@ -10,9 +10,15 @@ const state = {
   tab: "board",
   watchlist: loadWatchlist(),
   alerts: loadAlerts(),
+  alertThresholdPct: loadAlertThreshold(),
+  alertBooks: loadAlertBooks(),
   detailKey: null,
   detailMarket: null,
 };
+
+// Which bookmaker sheet mode is currently open: "board" filters board cards,
+// "alerts" filters which books' movements are allowed to generate alerts.
+let _bookSheetMode = "board";
 
 let _lastFetchedAt = null;
 let _lastStatusPrefix = "Loading…";
@@ -47,6 +53,41 @@ function loadAlerts() {
 
 function saveAlerts() {
   sessionStorage.setItem("props_alerts", JSON.stringify(state.alerts.slice(0, 30)));
+}
+
+function loadAlertThreshold() {
+  const raw = localStorage.getItem("props_alert_threshold_pct");
+  const value = raw != null ? Number(raw) : 3;
+  return Number.isFinite(value) && value >= 0 ? value : 3;
+}
+
+function saveAlertThreshold() {
+  localStorage.setItem("props_alert_threshold_pct", String(state.alertThresholdPct));
+}
+
+// null means "no restriction — alert on every book". Once the user narrows
+// the selection via the sheet, it becomes a concrete Set of book names.
+function loadAlertBooks() {
+  try {
+    const raw = localStorage.getItem("props_alert_books");
+    if (raw == null) return null;
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? new Set(parsed) : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveAlertBooks() {
+  if (state.alertBooks == null) {
+    localStorage.removeItem("props_alert_books");
+  } else {
+    localStorage.setItem("props_alert_books", JSON.stringify([...state.alertBooks]));
+  }
+}
+
+function allowedForAlerts(bookmaker) {
+  return state.alertBooks == null || state.alertBooks.has(bookmaker);
 }
 
 // ---------- helpers ----------
@@ -112,6 +153,9 @@ const searchInput = document.querySelector("#searchInput");
 const boardList = document.querySelector("#boardList");
 const watchList = document.querySelector("#watchList");
 const alertsList = document.querySelector("#alertsList");
+const alertThresholdInput = document.querySelector("#alertThreshold");
+const alertBooksChip = document.querySelector("#alertBooksChip");
+const alertBooksChipCount = document.querySelector("#alertBooksChipCount");
 const watchCountEl = document.querySelector("#watchCount");
 const alertCountEl = document.querySelector("#alertCount");
 
@@ -130,6 +174,7 @@ const detailList = document.querySelector("#detailList");
 
 const scrim = document.querySelector("#scrim");
 const bookSheet = document.querySelector("#bookSheet");
+const bookSheetTitle = document.querySelector("#bookSheetTitle");
 const bookSheetList = document.querySelector("#bookSheetList");
 const booksAllBtn = document.querySelector("#booksAllBtn");
 const booksNoneBtn = document.querySelector("#booksNoneBtn");
@@ -169,6 +214,10 @@ function buildGroups(records) {
 
 function leagueBooks(league) {
   return uniqueSorted(state.records.filter((r) => r.league === league).map((r) => r.bookmaker));
+}
+
+function allBooks() {
+  return uniqueSorted(state.records.map((r) => r.bookmaker));
 }
 
 // ---------- board rendering ----------
@@ -371,12 +420,16 @@ function renderWatchlist() {
 // ---------- alerts panel ----------
 
 function renderAlerts() {
-  if (state.alerts.length === 0) {
-    alertsList.innerHTML = `<div class="empty-state">No line or odds movement yet&hellip;</div>`;
+  const visible = state.alerts.filter((a) => allowedForAlerts(a.book));
+
+  if (visible.length === 0) {
+    alertsList.innerHTML = state.alerts.length === 0
+      ? `<div class="empty-state">No line or odds movement yet&hellip;</div>`
+      : `<div class="empty-state">No movement yet from the selected bookmakers.</div>`;
     return;
   }
 
-  alertsList.innerHTML = state.alerts.map((a) => `
+  alertsList.innerHTML = visible.map((a) => `
     <article class="alert-card" data-player="${escapeAttr(a.player)}" data-market="${escapeAttr(a.market)}">
       <div class="alert-top">
         <span>${a.player} &middot; ${marketLabel(a.market)}</span>
@@ -393,38 +446,55 @@ function pushAlert(entry) {
   saveAlerts();
 }
 
+function pctMove(delta, previousValue) {
+  if (delta == null || !previousValue) return null;
+  return Math.abs(delta / previousValue) * 100;
+}
+
 function collectMovementAlerts(records) {
   const now = Date.now();
+  const threshold = state.alertThresholdPct;
+
   for (const r of records) {
+    if (!allowedForAlerts(r.bookmaker)) continue;
     if (r.line_delta != null) {
-      const sign = r.line_delta > 0 ? "+" : "";
-      pushAlert({
-        player: r.player,
-        market: r.market,
-        book: r.bookmaker,
-        detail: `Line ${sign}${r.line_delta} → ${r.line.toFixed(1)}`,
-        when: now,
-      });
+      const prevLine = r.line - r.line_delta;
+      const pct = pctMove(r.line_delta, prevLine);
+      if (pct != null && pct >= threshold) {
+        pushAlert({
+          player: r.player,
+          market: r.market,
+          book: r.bookmaker,
+          detail: `Line ${prevLine.toFixed(1)} → ${r.line.toFixed(1)} (${pct.toFixed(1)}%)`,
+          when: now,
+        });
+      }
     }
     if (r.over_odds_delta != null) {
-      const sign = r.over_odds_delta > 0 ? "+" : "";
-      pushAlert({
-        player: r.player,
-        market: r.market,
-        book: r.bookmaker,
-        detail: `Over ${sign}${r.over_odds_delta.toFixed(3)} → ${formatOdds(r.over_odds_decimal)}`,
-        when: now,
-      });
+      const prevOver = r.over_odds_decimal - r.over_odds_delta;
+      const pct = pctMove(r.over_odds_delta, prevOver);
+      if (pct != null && pct >= threshold) {
+        pushAlert({
+          player: r.player,
+          market: r.market,
+          book: r.bookmaker,
+          detail: `Over ${formatOdds(prevOver)} → ${formatOdds(r.over_odds_decimal)} (${pct.toFixed(1)}%)`,
+          when: now,
+        });
+      }
     }
     if (r.under_odds_delta != null) {
-      const sign = r.under_odds_delta > 0 ? "+" : "";
-      pushAlert({
-        player: r.player,
-        market: r.market,
-        book: r.bookmaker,
-        detail: `Under ${sign}${r.under_odds_delta.toFixed(3)} → ${formatOdds(r.under_odds_decimal)}`,
-        when: now,
-      });
+      const prevUnder = r.under_odds_decimal - r.under_odds_delta;
+      const pct = pctMove(r.under_odds_delta, prevUnder);
+      if (pct != null && pct >= threshold) {
+        pushAlert({
+          player: r.player,
+          market: r.market,
+          book: r.bookmaker,
+          detail: `Under ${formatOdds(prevUnder)} → ${formatOdds(r.under_odds_decimal)} (${pct.toFixed(1)}%)`,
+          when: now,
+        });
+      }
     }
   }
 }
@@ -433,7 +503,8 @@ function collectMovementAlerts(records) {
 
 function renderCounts() {
   watchCountEl.textContent = state.watchlist.size ? `(${state.watchlist.size})` : "";
-  alertCountEl.textContent = state.alerts.length ? `(${state.alerts.length})` : "";
+  const visibleAlerts = state.alerts.filter((a) => allowedForAlerts(a.book)).length;
+  alertCountEl.textContent = visibleAlerts ? `(${visibleAlerts})` : "";
 }
 
 function setTab(tab) {
@@ -525,26 +596,61 @@ function renderDetail() {
 
 // ---------- bookmaker sheet ----------
 
-function openBookSheet() {
-  const books = leagueBooks(state.league);
-  bookSheetList.innerHTML = books.map((book) => `
-    <label class="sheet-check-row">
-      <input type="checkbox" value="${escapeAttr(book)}" ${state.activeBooks.has(book) ? "checked" : ""}>
-      <span>${book}</span>
-    </label>
-  `).join("");
+function openBookSheet(mode) {
+  _bookSheetMode = mode;
+
+  if (mode === "alerts") {
+    const books = allBooks();
+    bookSheetTitle.textContent = "Alert Bookmakers";
+    bookSheetList.innerHTML = books.map((book) => `
+      <label class="sheet-check-row">
+        <input type="checkbox" value="${escapeAttr(book)}" ${allowedForAlerts(book) ? "checked" : ""}>
+        <span>${book}</span>
+      </label>
+    `).join("");
+  } else {
+    const books = leagueBooks(state.league);
+    bookSheetTitle.textContent = "Bookmakers";
+    bookSheetList.innerHTML = books.map((book) => `
+      <label class="sheet-check-row">
+        <input type="checkbox" value="${escapeAttr(book)}" ${state.activeBooks.has(book) ? "checked" : ""}>
+        <span>${book}</span>
+      </label>
+    `).join("");
+  }
+
   scrim.hidden = false;
   bookSheet.hidden = false;
 }
 
 function closeBookSheet() {
-  state.activeBooks = new Set(
+  const checked = new Set(
     [...bookSheetList.querySelectorAll("input:checked")].map((i) => i.value)
   );
+  const total = bookSheetList.querySelectorAll("input").length;
+
+  if (_bookSheetMode === "alerts") {
+    // Treat "every book checked" the same as "no restriction" so newly
+    // added bookmakers are covered automatically instead of silently excluded.
+    state.alertBooks = checked.size === total ? null : checked;
+    saveAlertBooks();
+    renderAlertBooksChip();
+    renderCounts();
+    renderAlerts();
+  } else {
+    state.activeBooks = checked;
+    renderMarketRow();
+    renderBoard();
+  }
+
   scrim.hidden = true;
   bookSheet.hidden = true;
-  renderMarketRow();
-  renderBoard();
+}
+
+function renderAlertBooksChip() {
+  const total = allBooks().length;
+  const count = state.alertBooks == null ? total : state.alertBooks.size;
+  alertBooksChipCount.textContent = `${count}/${total}`;
 }
 
 // ---------- polling ----------
@@ -583,6 +689,7 @@ async function loadProps() {
     renderMarketRow();
     renderBoard();
     renderCounts();
+    renderAlertBooksChip();
     if (state.tab === "watch") renderWatchlist();
     if (state.tab === "alerts") renderAlerts();
     if (!screenDetail.hidden) renderDetail();
@@ -677,7 +784,8 @@ detailMarketRow.addEventListener("click", (e) => {
   renderDetail();
 });
 
-booksChip.addEventListener("click", openBookSheet);
+booksChip.addEventListener("click", () => openBookSheet("board"));
+alertBooksChip.addEventListener("click", () => openBookSheet("alerts"));
 scrim.addEventListener("click", closeBookSheet);
 booksDoneBtn.addEventListener("click", closeBookSheet);
 
@@ -686,6 +794,14 @@ booksAllBtn.addEventListener("click", () => {
 });
 booksNoneBtn.addEventListener("click", () => {
   bookSheetList.querySelectorAll("input").forEach((i) => (i.checked = false));
+});
+
+alertThresholdInput.value = state.alertThresholdPct;
+alertThresholdInput.addEventListener("change", () => {
+  const value = Number(alertThresholdInput.value);
+  state.alertThresholdPct = Number.isFinite(value) && value >= 0 ? value : 0;
+  alertThresholdInput.value = state.alertThresholdPct;
+  saveAlertThreshold();
 });
 
 setInterval(updateStatusLine, 1000);

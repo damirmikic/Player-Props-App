@@ -264,6 +264,72 @@ button, input {
   border-color: var(--color-accent);
 }
 
+/* ---------- Alert settings ---------- */
+
+.alert-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border: 2px solid var(--color-divider);
+  background: var(--color-surface);
+  margin: 0 16px 12px;
+  padding: 10px 12px;
+}
+
+.alert-settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.alert-settings label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--color-muted);
+}
+
+#alertBooksChip {
+  align-self: flex-start;
+}
+
+.alert-threshold-row {
+  display: flex;
+  align-items: center;
+  border: 2px solid var(--color-divider);
+  background: var(--color-bg);
+  flex-shrink: 0;
+}
+
+#alertThreshold {
+  width: 56px;
+  border: none;
+  background: transparent;
+  color: var(--color-text);
+  padding: 6px 4px 6px 10px;
+  font-size: 13px;
+  font-weight: 800;
+  text-align: right;
+}
+
+#alertThreshold:focus {
+  outline: none;
+}
+
+#alertThreshold::-webkit-inner-spin-button,
+#alertThreshold::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.alert-threshold-suffix {
+  padding: 0 10px 0 2px;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--color-muted);
+}
+
 /* ---------- Card list ---------- */
 
 .card-list {
@@ -539,6 +605,7 @@ button, input {
 #detailMarketRow {
   padding: 0 16px 14px;
   align-items: flex-start;
+  flex: 0 0 auto;
 }
 
 .detail-row {
@@ -727,6 +794,11 @@ button, input {
     max-width: 420px;
   }
 
+  .alert-settings {
+    margin: 16px 32px 12px;
+    max-width: 420px;
+  }
+
   #searchInput {
     padding: 11px 14px;
     font-size: 14px;
@@ -739,18 +811,21 @@ button, input {
   /* Board list: multi-column grid of cards instead of a single stacked column */
   #boardList {
     display: grid;
+    align-items: start;
     grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
     gap: 14px;
   }
 
   #watchList {
     display: grid;
+    align-items: start;
     grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
     gap: 12px;
   }
 
   #alertsList {
     display: grid;
+    align-items: start;
     grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
     gap: 10px;
   }
@@ -778,6 +853,7 @@ button, input {
   #detailList {
     padding: 0 32px 32px;
     display: grid;
+    align-items: start;
     grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
     gap: 12px;
   }

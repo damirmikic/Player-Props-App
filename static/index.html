@@ -48,6 +48,16 @@
 
         <!-- Alerts panel -->
         <div class="panel" id="panel-alerts" hidden>
+          <div class="alert-settings">
+            <div class="alert-settings-row">
+              <label for="alertThreshold">Alert me on moves of at least</label>
+              <div class="alert-threshold-row">
+                <input type="number" id="alertThreshold" min="0" max="100" step="0.5" inputmode="decimal">
+                <span class="alert-threshold-suffix">%</span>
+              </div>
+            </div>
+            <button type="button" class="books-chip" id="alertBooksChip">From books &middot; <span id="alertBooksChipCount">0</span></button>
+          </div>
           <div class="card-list" id="alertsList"></div>
         </div>
       </section>
@@ -77,7 +87,7 @@
       <section class="sheet" id="bookSheet" hidden aria-label="Bookmakers">
         <div class="sheet-handle"></div>
         <div class="sheet-head">
-          <h3>Bookmakers</h3>
+          <h3 id="bookSheetTitle">Bookmakers</h3>
           <div class="sheet-actions">
             <button type="button" class="ghost-btn" id="booksAllBtn">All</button>
             <button type="button" class="ghost-btn" id="booksNoneBtn">None</button>
