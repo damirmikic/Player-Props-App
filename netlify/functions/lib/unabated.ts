@@ -21,6 +21,7 @@ const EXCLUDED_BOOKMAKERS = new Set([
   "fliff",
   "hard rock",
   "hard rock (s)",
+  "kalshi",
   "parx",
   "prizepicks",
   "prophet exchange",

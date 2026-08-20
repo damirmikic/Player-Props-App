@@ -20,6 +20,7 @@ EXCLUDED_BOOKMAKERS = {
     "fliff",
     "hard rock",
     "hard rock (s)",
+    "kalshi",
     "parx",
     "prizepicks",
     "prophet exchange",
