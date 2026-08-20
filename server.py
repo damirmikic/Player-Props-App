@@ -14,6 +14,7 @@ import superbet_adapter
 import stoiximan_adapter
 import maxbet_adapter
 import mozzart_adapter
+import admiralbet_adapter
 from unabated_adapter import build_highlights
 from name_utils import to_canonical_name, to_canonical_league
 
@@ -136,9 +137,17 @@ def load_all_props():
     except Exception as exc:
         print(f"[mozzart] fetch failed — {exc}")
 
+    # --- AdmiralBet RS (multi-league, single book) ---
+    admiralbet_records = []
+    try:
+        admiralbet_records = admiralbet_adapter.load_admiralbet_props()
+    except Exception as exc:
+        print(f"[admiralbet] fetch failed — {exc}")
+
     all_records = (
         unabated_records + merkur_records + superbet_records
         + stoiximan_records + maxbet_records + mozzart_records
+        + admiralbet_records
     )
 
     # Temporarily hidden markets — pull back out once ready to show them again.
@@ -244,12 +253,13 @@ def load_all_props():
         "records": [_record_dict(r) for r in all_records],
         "highlights": build_highlights(all_records),
         "sources": {
-            "unabated":  unabated_adapter.UNABATED_WNBA_PROPS_URL,
-            "merkur":    merkur_adapter.MERKUR_SK_URL,
-            "superbet":  superbet_adapter.EVENTS_BY_DATE_URL,
-            "stoiximan": stoiximan_adapter._BASE,
-            "maxbet":    maxbet_adapter._BASE_URL,
-            "mozzart":   mozzart_adapter._BASE_URL,
+            "unabated":   unabated_adapter.UNABATED_WNBA_PROPS_URL,
+            "merkur":     merkur_adapter.MERKUR_SK_URL,
+            "superbet":   superbet_adapter.EVENTS_BY_DATE_URL,
+            "stoiximan":  stoiximan_adapter._BASE,
+            "maxbet":     maxbet_adapter._BASE_URL,
+            "mozzart":    mozzart_adapter._BASE_URL,
+            "admiralbet": "https://srboffer.admiralbet.rs",
         },
     }
 

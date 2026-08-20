@@ -11,6 +11,10 @@ import { loadSuperbetProps, EVENTS_BY_DATE_URL } from "./lib/superbet.js";
 import { loadStoiximanProps, BASE as STOIXIMAN_BASE } from "./lib/stoiximan.js";
 import { loadMaxbetProps, BASE_URL as MAXBET_BASE_URL } from "./lib/maxbet.js";
 import { loadMozzartProps, MOZZART_BASE_URL } from "./lib/mozzart.js";
+import {
+  loadAdmiralbetProps,
+  ADMIRALBET_BASE_URL,
+} from "./lib/admiralbet.js";
 import { mergeAndNormalize } from "./lib/merge.js";
 import { applyMovementDeltas } from "./lib/movement.js";
 import type { PropRecord } from "./lib/types.js";
@@ -65,6 +69,14 @@ export default async (req: Request, context: Context) => {
     console.error("[mozzart] fetch failed —", exc);
   }
 
+  // --- AdmiralBet RS (multi-league, single book) ---
+  let admiralbetRecords: PropRecord[] = [];
+  try {
+    admiralbetRecords = await loadAdmiralbetProps(context);
+  } catch (exc) {
+    console.error("[admiralbet] fetch failed —", exc);
+  }
+
   const allRecords = [
     ...unabatedRecords,
     ...merkurRecords,
@@ -72,6 +84,7 @@ export default async (req: Request, context: Context) => {
     ...stoiximanRecords,
     ...maxbetRecords,
     ...mozzartRecords,
+    ...admiralbetRecords,
   ];
 
   const { records, leagues, markets } = mergeAndNormalize(allRecords);
@@ -90,6 +103,7 @@ export default async (req: Request, context: Context) => {
       stoiximan: STOIXIMAN_BASE,
       maxbet: MAXBET_BASE_URL,
       mozzart: MOZZART_BASE_URL,
+      admiralbet: ADMIRALBET_BASE_URL,
     },
   };
 

@@ -18,6 +18,23 @@ const CANONICAL_RE = /^.+\s+[A-Z]\.$/;
 // Matches Mozzart's "F.Last" format: capital letter, period, no space, surname
 const INITIAL_DOT_LAST_RE = /^([A-Z])\.([A-Za-z\-']+)$/;
 
+const DIACRITICS_MAP: Record<string, string> = {
+  Đ: "Dj",
+  đ: "dj",
+  Ć: "C",
+  ć: "c",
+  Č: "C",
+  č: "c",
+  Š: "S",
+  š: "s",
+  Ž: "Z",
+  ž: "z",
+};
+
+function transliterateDiacritics(text: string): string {
+  return text.replace(/[ĐđĆćČčŠšŽž]/g, (char) => DIACRITICS_MAP[char] ?? char);
+}
+
 const NAME_ALIASES: Record<string, string> = Object.fromEntries(
   Object.entries(nameAliasesRaw as Record<string, string>).filter(
     ([k]) => !k.startsWith("_")
@@ -35,19 +52,28 @@ const LEAGUE_ALIASES: Record<string, string> = Object.fromEntries(
  *
  * Priority order:
  *   1. Alias table — exact string match
- *   2. Already canonical ("Boston A." pattern) — returned unchanged
- *   3. "F.Last" (Mozzart) — converted to "Last F."
- *   4. "First [Middle...] Last" (Unabated) — converted to "Last F."
- *   5. Fallback — returned as-is
+ *   2. Transliterate Serbian/Balkan diacritics
+ *   3. Alias table check on transliterated name
+ *   4. Already canonical ("Boston A." pattern) — returned unchanged
+ *   5. "F.Last" (Mozzart) — converted to "Last F."
+ *   6. "First [Middle...] Last" (Unabated) — converted to "Last F."
+ *   7. Fallback — returned as-is
  */
 export function toCanonicalName(raw: string): string {
-  const name = raw.trim();
+  let name = raw.trim();
 
   if (!name || name === "Unknown Player") {
     return name;
   }
 
-  const alias = NAME_ALIASES[name];
+  let alias = NAME_ALIASES[name];
+  if (alias) {
+    return alias;
+  }
+
+  name = transliterateDiacritics(name);
+
+  alias = NAME_ALIASES[name];
   if (alias) {
     return alias;
   }
