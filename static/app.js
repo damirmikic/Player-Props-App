@@ -524,7 +524,7 @@ function collectMovementAlerts(records) {
           player: r.player,
           market: r.market,
           book: r.bookmaker,
-          detail: `Over ${formatOdds(prevOver)} → ${formatOdds(r.over_odds_decimal)} (${pct.toFixed(1)}%)`,
+          detail: `Line ${r.line.toFixed(1)} · Over ${formatOdds(prevOver)} → ${formatOdds(r.over_odds_decimal)} (${pct.toFixed(1)}%)`,
           when: now,
         });
       }
@@ -537,7 +537,7 @@ function collectMovementAlerts(records) {
           player: r.player,
           market: r.market,
           book: r.bookmaker,
-          detail: `Under ${formatOdds(prevUnder)} → ${formatOdds(r.under_odds_decimal)} (${pct.toFixed(1)}%)`,
+          detail: `Line ${r.line.toFixed(1)} · Under ${formatOdds(prevUnder)} → ${formatOdds(r.under_odds_decimal)} (${pct.toFixed(1)}%)`,
           when: now,
         });
       }
