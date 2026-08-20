@@ -15,6 +15,7 @@ const state = {
   alertBooks: loadAlertBooks(),
   detailKey: null,
   detailMarket: null,
+  highlightedBook: loadHighlightedBook(),
 };
 
 // Which bookmaker sheet mode is currently open: "board" filters board cards,
@@ -89,6 +90,18 @@ function saveAlertBooks() {
 
 function allowedForAlerts(bookmaker) {
   return state.alertBooks == null || state.alertBooks.has(bookmaker);
+}
+
+function loadHighlightedBook() {
+  return localStorage.getItem("props_highlighted_book") || null;
+}
+
+function saveHighlightedBook() {
+  if (state.highlightedBook == null) {
+    localStorage.removeItem("props_highlighted_book");
+  } else {
+    localStorage.setItem("props_highlighted_book", state.highlightedBook);
+  }
 }
 
 // ---------- helpers ----------
@@ -323,9 +336,12 @@ function filteredBoardRecords() {
 }
 
 function bookCellHtml(book, record, consensus) {
+  const isGolden = state.highlightedBook === book;
+  const goldenClass = isGolden ? " golden" : "";
+
   if (!record) {
     return `
-      <div class="book-cell">
+      <div class="book-cell${goldenClass}">
         <div class="book-cell-head">${book}</div>
         <div class="pill-row"><span class="price-pill empty">–</span></div>
       </div>
@@ -346,7 +362,7 @@ function bookCellHtml(book, record, consensus) {
   const lineDiff = consensus != null && record.line !== consensus;
 
   return `
-    <div class="book-cell${lineDiff ? " line-diff" : ""}">
+    <div class="book-cell${lineDiff ? " line-diff" : ""}${goldenClass}">
       <div class="book-cell-head"><span>${book} &middot; ${record.line.toFixed(1)}</span>${lineDelta}</div>
       <div class="pill-row">
         <span class="price-pill${overBest}">O ${formatOdds(record.over_odds_decimal)}${overDelta}</span>
@@ -604,12 +620,19 @@ function renderDetail() {
   }
 
   detailList.innerHTML = marketRecords
-    .sort((a, b) => a.bookmaker.localeCompare(b.bookmaker))
+    .sort((a, b) => {
+      // Pinned (golden) book always sorts first
+      const aGolden = state.highlightedBook === a.bookmaker ? 0 : 1;
+      const bGolden = state.highlightedBook === b.bookmaker ? 0 : 1;
+      if (aGolden !== bGolden) return aGolden - bGolden;
+      return a.bookmaker.localeCompare(b.bookmaker);
+    })
     .map((r) => {
       const overBest = isBestOver(r) ? " best" : "";
       const underBest = isBestUnder(r) ? " best" : "";
+      const isGolden = state.highlightedBook === r.bookmaker;
       return `
-        <div class="detail-row">
+        <div class="detail-row${isGolden ? " golden" : ""}">
           <div class="detail-row-top">
             <span class="detail-row-book">${r.bookmaker}</span>
             <span class="detail-row-line">Line ${r.line.toFixed(1)}</span>
@@ -641,12 +664,18 @@ function openBookSheet(mode) {
   } else {
     const books = leagueBooks(state.league);
     bookSheetTitle.textContent = "Bookmakers";
-    bookSheetList.innerHTML = books.map((book) => `
-      <label class="sheet-check-row">
-        <input type="checkbox" value="${escapeAttr(book)}" ${state.activeBooks.has(book) ? "checked" : ""}>
-        <span>${book}</span>
-      </label>
-    `).join("");
+    bookSheetList.innerHTML = books.map((book) => {
+      const isGolden = state.highlightedBook === book;
+      return `
+        <label class="sheet-check-row">
+          <input type="checkbox" value="${escapeAttr(book)}" ${state.activeBooks.has(book) ? "checked" : ""}>
+          <span>${book}</span>
+          <button type="button" class="golden-star-btn${isGolden ? " active" : ""}" data-book="${escapeAttr(book)}" title="Highlight this bookmaker in gold" aria-label="Highlight ${escapeAttr(book)}">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="${isGolden ? "#f5a623" : "none"}" stroke="${isGolden ? "#f5a623" : "currentColor"}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+          </button>
+        </label>
+      `;
+    }).join("");
   }
 
   scrim.hidden = false;
@@ -818,6 +847,17 @@ detailMarketRow.addEventListener("click", (e) => {
   if (!chip) return;
   state.detailMarket = chip.dataset.market;
   renderDetail();
+});
+
+bookSheetList.addEventListener("click", (e) => {
+  const goldenBtn = e.target.closest(".golden-star-btn");
+  if (!goldenBtn) return;
+  e.preventDefault();
+  const book = goldenBtn.dataset.book;
+  state.highlightedBook = state.highlightedBook === book ? null : book;
+  saveHighlightedBook();
+  // Refresh the sheet rows to reflect the new golden state
+  openBookSheet("board");
 });
 
 booksChip.addEventListener("click", () => openBookSheet("board"));
