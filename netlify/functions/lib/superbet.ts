@@ -25,6 +25,7 @@ const CATEGORY_NAMES: Record<number, string> = {
   108: "ACB",
   56: "Lega A",
   185: "Izrael",
+  36: "Friendly International",
 };
 
 const PLAYER_PROP_MARKETS: Record<number, string> = {
@@ -36,6 +37,8 @@ const PLAYER_PROP_MARKETS: Record<number, string> = {
   233565: "points",
   233566: "assists",
   233567: "rebounds",
+  // Friendlies / Internationals
+  231182: "points",
 };
 
 const CACHE_STORE = "superbet-cache";

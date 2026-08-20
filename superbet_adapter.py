@@ -51,6 +51,7 @@ CATEGORY_NAMES: dict[int, str] = {
     108: "ACB",
     56:  "Lega A",
     185: "Izrael",
+    36:  "Friendly International",
 }
 
 
@@ -63,6 +64,8 @@ PLAYER_PROP_MARKETS = {
     233565: "points",
     233566: "assists",
     233567: "rebounds",
+    # Friendlies / Internationals
+    231182: "points",
 }
 
 _CACHE_FILE       = Path(__file__).resolve().parent / "superbet_cache.json"
