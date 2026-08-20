@@ -111,7 +111,12 @@ function titleCase(value) {
 }
 
 function marketLabel(market) {
-  return titleCase(market.replace(/_/g, " "));
+  return titleCase((market || "").replace(/_/g, " "));
+}
+
+function marketTagHtml(market) {
+  const m = market || "points";
+  return `<span class="market-tag market-${escapeAttr(m)}">${marketLabel(m)}</span>`;
 }
 
 function formatOdds(value) {
@@ -310,6 +315,7 @@ function renderMarketRow() {
     const chip = document.createElement("button");
     chip.type = "button";
     chip.className = "market-chip";
+    chip.setAttribute("data-market", market);
     chip.textContent = marketLabel(market);
     chip.setAttribute("aria-selected", String(state.marketFilter === market));
     chip.addEventListener("click", () => {
@@ -401,7 +407,7 @@ function propCardHtml(row) {
       <div class="prop-card-top">
         <div class="prop-card-meta">
           <p class="prop-name${moved ? " flash" : ""}">${row.player}</p>
-          <p class="prop-subline">${row.team ? row.team + " &middot; " : ""}${marketLabel(row.market)}</p>
+          <p class="prop-subline">${row.team ? `<span class="prop-team">${escapeAttr(row.team)}</span> &middot; ` : ""}${marketTagHtml(row.market)}</p>
           <p class="prop-game">vs ${row.game}</p>
         </div>
         ${consensus != null ? `<span class="consensus-chip">Consensus ${consensus.toFixed(1)}</span>` : ""}
@@ -449,7 +455,7 @@ function renderWatchlist() {
     const unders = e.records.map((r) => r.under_odds_decimal).filter((v) => v != null);
     const bestOver = overs.length ? Math.max(...overs) : null;
     const bestUnder = unders.length ? Math.max(...unders) : null;
-    const summary = `${marketLabel(e.market)} · Best O ${formatOdds(bestOver)} / U ${formatOdds(bestUnder)}`;
+    const summary = `${marketTagHtml(e.market)} · Best O ${formatOdds(bestOver)} / U ${formatOdds(bestUnder)}`;
 
     return `
       <article class="watch-row" data-player="${escapeAttr(e.player)}" data-market="${escapeAttr(e.market)}">
@@ -478,7 +484,7 @@ function renderAlerts() {
   alertsList.innerHTML = visible.map((a) => `
     <article class="alert-card" data-player="${escapeAttr(a.player)}" data-market="${escapeAttr(a.market)}">
       <div class="alert-top">
-        <span>${a.player} &middot; ${marketLabel(a.market)}</span>
+        <span>${a.player} &middot; ${marketTagHtml(a.market)}</span>
         <span class="alert-time">${relativeTime(a.when)}</span>
       </div>
       <p class="alert-detail">${a.book} — ${a.detail}</p>
