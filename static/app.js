@@ -93,7 +93,7 @@ function allowedForAlerts(bookmaker) {
 }
 
 function loadHighlightedBook() {
-  return localStorage.getItem("props_highlighted_book") || null;
+  return localStorage.getItem("props_highlighted_book") || "merkurxtip";
 }
 
 function saveHighlightedBook() {
