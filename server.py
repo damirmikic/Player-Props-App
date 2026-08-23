@@ -6,7 +6,11 @@ import json
 import mimetypes
 import re
 import threading
+import time
 import urllib.parse
+import urllib.request
+
+import news_utils
 
 import unabated_adapter
 import merkur_adapter
@@ -25,6 +29,14 @@ ROOT = Path(__file__).resolve().parent
 # Keyed by "player|market|bookmaker"; values are {line, over_odds_decimal, under_odds_decimal}.
 _prev_snapshot: dict = {}
 _snapshot_lock = threading.Lock()
+
+# ---- News feed cache -------------------------------------------------------
+_NEWS_FEED_URL = "https://rss.app/feeds/v1.1/5Wdnismo41isPtyA.json"
+_NEWS_TTL_SECONDS = 300  # 5 minuta
+
+_news_cache: dict | None = None
+_news_cache_ts: float = 0.0
+_news_lock = threading.Lock()
 
 
 def _snapshot_key(r) -> str:
@@ -264,12 +276,83 @@ def load_all_props():
     }
 
 
+def _fetch_news_feed() -> dict:
+    """Fetch the RSS JSON feed, return the parsed dict (or {} on error)."""
+    req = urllib.request.Request(
+        _NEWS_FEED_URL,
+        headers={"User-Agent": "PlayerPropsApp/1.0"},
+    )
+    with urllib.request.urlopen(req, timeout=8) as resp:
+        return json.loads(resp.read().decode("utf-8"))
+
+
+def load_news() -> dict:
+    """
+    Return news items annotated with recognised players.
+
+    The feed is cached for _NEWS_TTL_SECONDS.  On the first call after a cache
+    miss the feed is re-fetched; failures return the stale cache (or []).
+    """
+    global _news_cache, _news_cache_ts
+
+    now = time.monotonic()
+
+    with _news_lock:
+        if _news_cache is not None and (now - _news_cache_ts) < _NEWS_TTL_SECONDS:
+            return _news_cache
+
+    try:
+        raw = _fetch_news_feed()
+    except Exception as exc:
+        print(f"[news] feed fetch failed — {exc}")
+        with _news_lock:
+            return _news_cache or {"items": []}
+
+    # Collect the canonical players that currently have active props
+    with _snapshot_lock:
+        known_players = [
+            key.split("|")[0] for key in _prev_snapshot
+        ]
+    known_players = list(dict.fromkeys(known_players))  # deduplicate, keep order
+
+    items_out = []
+    for item in raw.get("items", [])[:30]:
+        # Combine title + body text for better matching surface
+        title = item.get("title", "")
+        body  = item.get("content_text", "")
+        full_text = f"{title} {body}"
+
+        players = news_utils.extract_players_from_text(full_text, known_players)
+
+        items_out.append({
+            "id":           item.get("id", ""),
+            "text":         body or title,
+            "url":          item.get("url", ""),
+            "image":        item.get("image"),
+            "published_at": item.get("date_published", ""),
+            "players":      players,
+        })
+
+    result = {"items": [i for i in items_out if i["players"]]}
+
+    with _news_lock:
+        _news_cache = result
+        _news_cache_ts = time.monotonic()
+
+    return result
+
+
 class AppHandler(SimpleHTTPRequestHandler):
     def do_GET(self):
         parsed = urllib.parse.urlparse(self.path)
 
         if parsed.path == "/api/props":
             payload = load_all_props()
+            self.send_json(payload)
+            return
+
+        if parsed.path == "/api/news":
+            payload = load_news()
             self.send_json(payload)
             return
 

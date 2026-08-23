@@ -110,6 +110,24 @@ function titleCase(value) {
   return value.replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+/** Escape a string for safe insertion as HTML text content. */
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+/** Escape a string for safe insertion into an HTML attribute value. */
+function escapeAttr(str) {
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;");
+}
+
+
 function marketLabel(market) {
   return titleCase((market || "").replace(/_/g, " "));
 }
@@ -145,6 +163,37 @@ function relativeTime(ts) {
   if (diff < 60) return `${diff}s ago`;
   if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
   return `${Math.floor(diff / 3600)}h ago`;
+}
+
+/**
+ * Format a kickoff ISO timestamp into a compact local-time string.
+ * Returns null if timestamp is missing or unparseable.
+ *
+ * Today:     "Today 21:00"
+ * Tomorrow:  "Tomorrow 14:30"
+ * This week: "Mon 18:00"
+ * Otherwise: "24 Aug 18:00"
+ */
+function formatKickoff(isoStr) {
+  if (!isoStr) return null;
+  const d = new Date(isoStr);
+  if (isNaN(d)) return null;
+
+  const now = new Date();
+  const timeStr = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
+
+  const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const kickoffDay   = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const dayDiff = Math.round((kickoffDay - todayMidnight) / 86400000);
+
+  if (dayDiff === 0) return `Today ${timeStr}`;
+  if (dayDiff === 1) return `Tomorrow ${timeStr}`;
+  if (dayDiff > 1 && dayDiff < 7) {
+    const dayName = d.toLocaleDateString([], { weekday: "short" });
+    return `${dayName} ${timeStr}`;
+  }
+  const dateStr = d.toLocaleDateString([], { day: "numeric", month: "short" });
+  return `${dateStr} ${timeStr}`;
 }
 
 function isBestOver(record) {
@@ -199,6 +248,8 @@ const bookSheetList = document.querySelector("#bookSheetList");
 const booksAllBtn = document.querySelector("#booksAllBtn");
 const booksNoneBtn = document.querySelector("#booksNoneBtn");
 const booksDoneBtn = document.querySelector("#booksDoneBtn");
+
+const tickerInner = document.querySelector("#tickerInner");
 
 // ---------- data grouping ----------
 
@@ -401,6 +452,7 @@ function propCardHtml(row) {
 
   const consensus = consensusLine(row, books);
   const cells = books.map((book) => bookCellHtml(book, row.books[book], consensus)).join("");
+  const kickoff = formatKickoff(row.kickoff_time);
 
   return `
     <article class="prop-card" data-player="${escapeAttr(row.player)}" data-market="${escapeAttr(row.market)}">
@@ -408,7 +460,7 @@ function propCardHtml(row) {
         <div class="prop-card-meta">
           <p class="prop-name${moved ? " flash" : ""}">${row.player}</p>
           <p class="prop-subline">${row.team ? `<span class="prop-team">${escapeAttr(row.team)}</span> &middot; ` : ""}${marketTagHtml(row.market)}</p>
-          <p class="prop-game">vs ${row.game}</p>
+          <p class="prop-game">${row.game ? `vs ${escapeHtml(row.game)}` : ""}&nbsp;${kickoff ? `<span class="kickoff-badge">🕐 ${escapeHtml(kickoff)}</span>` : ""}</p>
         </div>
         ${consensus != null ? `<span class="consensus-chip">Consensus ${consensus.toFixed(1)}</span>` : ""}
         <button type="button" class="star-toggle" data-active="${isStarred}" aria-label="Toggle watchlist">${STAR_OUTLINE}</button>
@@ -775,6 +827,114 @@ async function loadProps() {
   }
 }
 
+// ---------- news ticker ----------
+
+/**
+ * Build the displayed text for one ticker item, wrapping detected player
+ * names in clickable chips. Uses a simple split-and-replace approach so
+ * we never accidentally escape HTML entities inside player names.
+ */
+function buildTickerItemHTML(text, players) {
+  if (!players || players.length === 0) return escapeHtml(text);
+
+  // For each player build a regex that matches the last-name part anywhere in text.
+  // Canonical format is "Last F." or "Van Lith H."
+  // We extract the last name (everything before the final " X." initial).
+  const sorted = players.slice().sort((a, b) => b.length - a.length); // longest first to avoid partial overlaps
+
+  let html = escapeHtml(text);
+
+  for (const canonical of sorted) {
+    // Extract last name from canonical "Last F."
+    const parts = canonical.trim().split(/\s+/);
+    if (parts.length < 2) continue;
+    const lastName = parts.slice(0, -1).join(" ");
+    if (lastName.length < 4) continue;
+
+    // Build escaped versions for HTML replacement
+    const escapedLast = escapeHtml(lastName);
+    const escapedCanonical = escapeAttr(canonical);
+    const displayName = escapeHtml(lastName);
+
+    // Replace within already-escaped HTML — safe because last names are ASCII-safe
+    const re = new RegExp(`\\b${escapedLast.replace(/[-]/g, '\\-')}\\b`, 'gi');
+    html = html.replace(re, (match) =>
+      `<span class="ticker-player-chip" data-player="${escapedCanonical}" tabindex="0" role="button" aria-label="View props for ${displayName}">${match}</span>`
+    );
+  }
+
+  return html;
+}
+
+/**
+ * Truncate plain text to ~120 chars at a word boundary.
+ */
+function truncateTickerText(text, maxLen = 120) {
+  if (!text) return "";
+  // Strip the trailing "— @handle Date" attribution added by the RSS app
+  const cleaned = text.replace(/—\s*@\S+\s+\w+\s+\d+,\s*\d+\s*$/, "").trim();
+  if (cleaned.length <= maxLen) return cleaned;
+  const cut = cleaned.lastIndexOf(" ", maxLen);
+  return (cut > 60 ? cleaned.slice(0, cut) : cleaned.slice(0, maxLen)) + "…";
+}
+
+/**
+ * Extract source handle from tweet text ("— @handle Date") or return null.
+ */
+function extractSource(text) {
+  const m = (text || "").match(/—\s*(@\S+)/);
+  return m ? m[1] : null;
+}
+
+let _newsRefreshTimer = null;
+
+/**
+ * Render news items into the ticker strip.
+ * Items are duplicated for a seamless CSS loop animation.
+ */
+function renderTicker(items) {
+  if (!items || items.length === 0) {
+    tickerInner.innerHTML = '<span class="ticker-loading">No news available</span>';
+    return;
+  }
+
+  // Build HTML for one set of items
+  const buildSet = () => items.map((item) => {
+    const text = truncateTickerText(item.text);
+    const source = extractSource(item.text);
+    const contentHTML = buildTickerItemHTML(text, item.players);
+    const sourceHTML = source
+      ? `<span class="ticker-item-source">${escapeHtml(source)}</span>`
+      : "";
+    return `<span class="ticker-item"><span class="ticker-item-bullet"></span>${contentHTML}${sourceHTML}</span>`;
+  }).join("");
+
+  // Duplicate for seamless loop
+  const setHTML = buildSet();
+  tickerInner.innerHTML = setHTML + setHTML;
+
+  // Adjust animation duration based on content length (~80px/s)
+  const totalChars = items.reduce((acc, i) => acc + (i.text || "").length, 0);
+  const duration = Math.max(30, Math.min(150, Math.round(totalChars * 0.28)));
+  tickerInner.style.setProperty("--ticker-duration", `${duration}s`);
+}
+
+async function loadNews() {
+  clearTimeout(_newsRefreshTimer);
+  try {
+    const res = await fetch("/api/news");
+    if (!res.ok) throw new Error(`news API ${res.status}`);
+    const data = await res.json();
+    renderTicker(data.items || []);
+  } catch (err) {
+    console.warn("[ticker] news load failed:", err);
+    // Keep existing ticker content; don't blank it on error
+  } finally {
+    // Refresh every 5 minutes
+    _newsRefreshTimer = setTimeout(loadNews, 5 * 60_000);
+  }
+}
+
 // ---------- event wiring ----------
 
 document.querySelectorAll(".seg-btn").forEach((btn) => {
@@ -889,3 +1049,28 @@ alertThresholdInput.addEventListener("change", () => {
 setInterval(updateStatusLine, 1000);
 renderCounts();
 loadProps();
+loadNews();
+
+// ---------- ticker click handling ----------
+
+tickerInner.addEventListener("click", (e) => {
+  const chip = e.target.closest(".ticker-player-chip");
+  if (!chip) return;
+  const player = chip.dataset.player;
+  if (!player) return;
+  const first = state.records.find((r) => r.player === player);
+  if (!first) return;
+  // Switch to board screen if we're elsewhere
+  if (!screenBoard.getAttribute("data-active")) {
+    closeDetail();
+  }
+  openDetail(player, first.market);
+});
+
+tickerInner.addEventListener("keydown", (e) => {
+  if (e.key !== "Enter" && e.key !== " ") return;
+  const chip = e.target.closest(".ticker-player-chip");
+  if (!chip) return;
+  e.preventDefault();
+  chip.click();
+});
