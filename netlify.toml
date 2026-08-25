@@ -11,3 +11,8 @@
   from = "/api/mozzart-leagues"
   to = "/.netlify/functions/mozzart-leagues"
   status = 200
+
+[[redirects]]
+  from = "/api/news"
+  to = "/.netlify/functions/news"
+  status = 200
