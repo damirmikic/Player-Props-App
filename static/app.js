@@ -919,13 +919,71 @@ function renderTicker(items) {
   tickerInner.style.setProperty("--ticker-duration", `${duration}s`);
 }
 
+/**
+ * Extract the last-name portion from a canonical "Last F." player string.
+ * Examples: "Jokic N." → "Jokic", "Van Lith H." → "Van Lith"
+ */
+function _playerLastName(canonical) {
+  const parts = canonical.trim().split(/\s+/);
+  return parts.length < 2 ? canonical.trim() : parts.slice(0, -1).join(" ");
+}
+
+/**
+ * Given a news-item text and the list of known canonical player names,
+ * return the subset of players found in the text (word-boundary match,
+ * case-insensitive), ordered by first appearance.
+ */
+function _matchPlayersInText(text, knownPlayers) {
+  if (!text || !knownPlayers.length) return [];
+
+  const found = [];
+  const seen = new Set();
+
+  for (const canonical of knownPlayers) {
+    if (seen.has(canonical)) continue;
+    const lastName = _playerLastName(canonical);
+    if (lastName.length < 4) continue; // too ambiguous
+
+    const re = new RegExp(
+      `\\b${lastName.replace(/[-]/g, "\\-")}\\b`,
+      "i"
+    );
+    const m = re.exec(text);
+    if (m) {
+      found.push({ pos: m.index, canonical });
+      seen.add(canonical);
+    }
+  }
+
+  found.sort((a, b) => a.pos - b.pos);
+  return found.map((f) => f.canonical);
+}
+
 async function loadNews() {
   clearTimeout(_newsRefreshTimer);
   try {
     const res = await fetch("/api/news");
     if (!res.ok) throw new Error(`news API ${res.status}`);
     const data = await res.json();
-    renderTicker(data.items || []);
+
+    // Build the deduplicated list of canonical player names from the props
+    // already loaded into state.records. This mirrors what server.py does with
+    // _prev_snapshot, but works client-side without shared Netlify state.
+    const knownPlayers = [
+      ...new Map(
+        state.records.map((r) => [r.player, r.player])
+      ).values(),
+    ];
+
+    // Annotate each item with matched players (client-side, stateless-safe)
+    const items = (data.items || []).map((item) => ({
+      ...item,
+      players: _matchPlayersInText(item.text || "", knownPlayers),
+    }));
+
+    // Only show items where at least one active player was found,
+    // matching the server.py filter: result = {"items": [i for i in items_out if i["players"]]}
+    renderTicker(items.filter((i) => i.players.length > 0));
   } catch (err) {
     console.warn("[ticker] news load failed:", err);
     // Keep existing ticker content; don't blank it on error
