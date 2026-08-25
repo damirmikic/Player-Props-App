@@ -53,6 +53,10 @@
           </div>
           <div class="search-wrap">
             <input type="search" id="searchInput" placeholder="Search player or team&hellip;" autocomplete="off">
+            <div class="sort-toggle" role="group" aria-label="Sort by">
+              <button type="button" class="sort-btn" data-sort="kickoff" id="sortKickoff" aria-pressed="true">🕐 KO Time</button>
+              <button type="button" class="sort-btn" data-sort="name" id="sortName" aria-pressed="false">A–Z Name</button>
+            </div>
           </div>
           <div class="card-list" id="boardList"></div>
         </div>

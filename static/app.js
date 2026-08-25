@@ -16,6 +16,7 @@ const state = {
   detailKey: null,
   detailMarket: null,
   highlightedBook: loadHighlightedBook(),
+  sortBy: localStorage.getItem("props_sort") || "kickoff",
 };
 
 // Which bookmaker sheet mode is currently open: "board" filters board cards,
@@ -277,10 +278,41 @@ function buildGroups(records) {
     if (!row.kickoff_time && record.kickoff_time) row.kickoff_time = record.kickoff_time;
     row.books[record.bookmaker] = record;
   }
-  return [...rows.values()].sort((a, b) => {
-    const p = a.player.localeCompare(b.player);
-    return p !== 0 ? p : a.market.localeCompare(b.market);
+
+  const sorted = [...rows.values()];
+
+  if (state.sortBy === "name") {
+    sorted.sort((a, b) => {
+      const p = a.player.localeCompare(b.player);
+      return p !== 0 ? p : a.market.localeCompare(b.market);
+    });
+  } else {
+    // Default: sort by kickoff ascending; rows without a kickoff float to bottom
+    sorted.sort((a, b) => {
+      const aHas = !!a.kickoff_time;
+      const bHas = !!b.kickoff_time;
+      if (aHas && bHas) {
+        const timeDiff = a.kickoff_time.localeCompare(b.kickoff_time);
+        if (timeDiff !== 0) return timeDiff;
+      } else if (aHas) return -1;
+      else if (bHas) return 1;
+      // Secondary: name within same kickoff bucket
+      const p = a.player.localeCompare(b.player);
+      return p !== 0 ? p : a.market.localeCompare(b.market);
+    });
+  }
+
+  return sorted;
+}
+
+function setSortBy(value) {
+  state.sortBy = value;
+  localStorage.setItem("props_sort", value);
+  // Update toggle button states
+  document.querySelectorAll(".sort-btn").forEach((btn) => {
+    btn.setAttribute("aria-pressed", String(btn.dataset.sort === value));
   });
+  renderBoard();
 }
 
 function leagueBooks(league) {
@@ -1003,6 +1035,13 @@ searchInput.addEventListener("input", (e) => {
   state.search = e.target.value;
   renderBoard();
 });
+
+// Sort toggle — initialize aria-pressed from persisted state, then wire clicks
+document.querySelectorAll(".sort-btn").forEach((btn) => {
+  btn.setAttribute("aria-pressed", String(btn.dataset.sort === state.sortBy));
+  btn.addEventListener("click", () => setSortBy(btn.dataset.sort));
+});
+
 
 matchSelect.addEventListener("change", (e) => {
   state.matchFilter = e.target.value;

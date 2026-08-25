@@ -288,6 +288,41 @@ button, input {
   border-color: var(--color-accent);
 }
 
+/* ---------- Sort toggle ---------- */
+
+.sort-toggle {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.sort-btn {
+  flex: 1;
+  padding: 7px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+  border: 2px solid var(--color-divider);
+  background: var(--color-surface);
+  color: var(--color-muted);
+  cursor: pointer;
+  border-radius: 6px;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  letter-spacing: 0.02em;
+}
+
+.sort-btn[aria-pressed="true"] {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: #fff;
+}
+
+.sort-btn:hover:not([aria-pressed="true"]) {
+  border-color: var(--color-accent);
+  color: var(--color-text);
+}
+
+
 /* ---------- Alert settings ---------- */
 
 .alert-settings {
