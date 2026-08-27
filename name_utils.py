@@ -96,6 +96,9 @@ def _get_league_aliases() -> dict:
     return _league_aliases
 
 
+_APOSTROPHE_RE = re.compile(r"[`'’‘´ʼʻ]")
+
+
 def to_canonical_name(raw: str) -> str:
     """
     Convert any player name string to the canonical "Last F." form.
@@ -110,7 +113,7 @@ def to_canonical_name(raw: str) -> str:
     6. "First [Middle...] Last" (Unabated) — converted to "Last F."
     7. Fallback — returned as-is
     """
-    name = raw.strip()
+    name = _APOSTROPHE_RE.sub("'", raw.strip())
 
     if not name or name == "Unknown Player":
         return name

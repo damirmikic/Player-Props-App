@@ -59,8 +59,10 @@ const LEAGUE_ALIASES: Record<string, string> = Object.fromEntries(
  *   6. "First [Middle...] Last" (Unabated) — converted to "Last F."
  *   7. Fallback — returned as-is
  */
+const APOSTROPHE_RE = /[`'’‘´ʼʻ]/g;
+
 export function toCanonicalName(raw: string): string {
-  let name = raw.trim();
+  let name = raw.trim().replace(APOSTROPHE_RE, "'");
 
   if (!name || name === "Unknown Player") {
     return name;
