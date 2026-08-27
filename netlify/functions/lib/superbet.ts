@@ -25,7 +25,7 @@ const CATEGORY_NAMES: Record<number, string> = {
   108: "ACB",
   56: "Lega A",
   185: "Izrael",
-  36: "Friendly International",
+  36: "FIBA Qualifiers",
 };
 
 const PLAYER_PROP_MARKETS: Record<number, string> = {

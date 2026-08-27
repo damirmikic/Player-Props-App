@@ -51,7 +51,7 @@ CATEGORY_NAMES: dict[int, str] = {
     108: "ACB",
     56:  "Lega A",
     185: "Izrael",
-    36:  "Friendly International",
+    36:  "FIBA Qualifiers",
 }
 
 
