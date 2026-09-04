@@ -113,7 +113,7 @@ def to_canonical_name(raw: str) -> str:
     6. "First [Middle...] Last" (Unabated) — converted to "Last F."
     7. Fallback — returned as-is
     """
-    name = _APOSTROPHE_RE.sub("'", raw.strip())
+    name = _APOSTROPHE_RE.sub("'", re.sub(r"\s+", " ", raw.strip()))
 
     if not name or name == "Unknown Player":
         return name

@@ -62,7 +62,7 @@ const LEAGUE_ALIASES: Record<string, string> = Object.fromEntries(
 const APOSTROPHE_RE = /[`'’‘´ʼʻ]/g;
 
 export function toCanonicalName(raw: string): string {
-  let name = raw.trim().replace(APOSTROPHE_RE, "'");
+  let name = raw.trim().replace(/\s+/g, " ").replace(APOSTROPHE_RE, "'");
 
   if (!name || name === "Unknown Player") {
     return name;
