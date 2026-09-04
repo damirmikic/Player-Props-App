@@ -28,6 +28,19 @@ const CATEGORY_NAMES: Record<number, string> = {
   36: "FIBA Qualifiers",
 };
 
+// categoryId 36 is a shared "international/other" bucket that Superbet
+// reuses across unrelated competitions (FIBA Qualifiers, World Cup Women,
+// Euroleague, various domestic leagues) — categoryName is never populated
+// by this API, so a single categoryId → label mapping isn't enough to
+// disambiguate. tournamentId is the only field that varies per competition
+// within that bucket, so give it its own override table, checked first.
+const TOURNAMENT_NAMES: Record<number, string> = {
+  6361: "World Cup Women",
+  6362: "World Cup Women",
+  6363: "World Cup Women",
+  6364: "World Cup Women",
+};
+
 const PLAYER_PROP_MARKETS: Record<number, string> = {
   // ACB / Lega A / Izrael
   239934: "points",
@@ -92,7 +105,7 @@ async function parseSuperbetProps(events: any[]): Promise<PropRecord[]> {
   const timestamp = new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
 
   for (const event of events) {
-    let league = CATEGORY_NAMES[event.categoryId ?? -1];
+    let league = TOURNAMENT_NAMES[event.tournamentId ?? -1] ?? CATEGORY_NAMES[event.categoryId ?? -1];
     if (!league) {
       const cid = event.categoryId ?? "?";
       league = (event.categoryName || `Cat ${cid}`).trim();

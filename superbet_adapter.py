@@ -54,6 +54,19 @@ CATEGORY_NAMES: dict[int, str] = {
     36:  "FIBA Qualifiers",
 }
 
+# categoryId 36 is a shared "international/other" bucket that Superbet
+# reuses across unrelated competitions (FIBA Qualifiers, World Cup Women,
+# Euroleague, various domestic leagues) — categoryName is never populated
+# by this API, so a single categoryId → label mapping isn't enough to
+# disambiguate. tournamentId is the only field that varies per competition
+# within that bucket, so give it its own override table, checked first.
+TOURNAMENT_NAMES: dict[int, str] = {
+    6361: "World Cup Women",
+    6362: "World Cup Women",
+    6363: "World Cup Women",
+    6364: "World Cup Women",
+}
+
 
 PLAYER_PROP_MARKETS = {
     # ACB / Lega A / Izrael
@@ -133,7 +146,9 @@ def parse_superbet_props(events: list[dict]) -> list[PropRecord]:
     timestamp = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
 
     for event in events:
-        league    = CATEGORY_NAMES.get(event.get("categoryId", -1))
+        league    = TOURNAMENT_NAMES.get(event.get("tournamentId", -1))
+        if league is None:
+            league = CATEGORY_NAMES.get(event.get("categoryId", -1))
         if league is None:
             cid = event.get("categoryId", "?")
             league = (event.get("categoryName") or f"Cat {cid}").strip()
