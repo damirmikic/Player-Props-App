@@ -65,6 +65,7 @@ TOURNAMENT_NAMES: dict[int, str] = {
     6362: "World Cup Women",
     6363: "World Cup Women",
     6364: "World Cup Women",
+    6751: "World Cup Women",
 }
 
 

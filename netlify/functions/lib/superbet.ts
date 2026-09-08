@@ -39,6 +39,7 @@ const TOURNAMENT_NAMES: Record<number, string> = {
   6362: "World Cup Women",
   6363: "World Cup Women",
   6364: "World Cup Women",
+  6751: "World Cup Women",
 };
 
 const PLAYER_PROP_MARKETS: Record<number, string> = {
