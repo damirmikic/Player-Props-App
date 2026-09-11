@@ -20,12 +20,21 @@ const SUPPORTED_LEAGUES = [
   { path: "spain/liga-endesa/438g", league: "ACB" },
   { path: "usa/wnba/440g", league: "WNBA" },
   { path: "israel/super-league/1042g", league: "Izrael" },
+  { path: "international/club-friendlies/16726", league: "Club Friendly" },
+  { path: "euroleague/euroleague/439g", league: "Euroleague" },
 ];
 
 const PROP_MARKET_TYPES: Record<string, string> = {
   playerspoints: "points",
   playersrebounds: "rebounds",
   playersassists: "assists",
+};
+
+const EVENT_MARKET_TYPES: Record<string, string> = {
+  PLNP: "points",
+  PLNR: "rebounds",
+  PLNA: "assists",
+  PLN3: "three_pointers",
 };
 
 const CACHE_STORE = "stoiximan-cache";
@@ -96,7 +105,7 @@ function parseLeagueMarket(
         }
 
         for (const row of tl.rows ?? []) {
-          const playerRaw: string = (row.title || "").trim();
+          const playerRaw: string = (row.title || row.name || "").trim();
           if (!playerRaw) continue;
           const player = toCanonicalName(playerRaw);
           const team = groupMap[row.groupId] ?? "";
@@ -137,17 +146,144 @@ function parseLeagueMarket(
   return records;
 }
 
+function parseMatchEventProps(data: any, leagueLabel: string): PropRecord[] {
+  const records: PropRecord[] = [];
+  const timestamp = new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
+  const event = data?.data?.event;
+  if (!event) return records;
+
+  const rawName: string = event.name || "";
+  const parts = rawName.split(/\s+-\s+/);
+  const game = parts.length === 2 ? `${parts[1]} @ ${parts[0]}` : rawName;
+
+  const startMs = event.startTime ?? 0;
+  const kickoffTime = startMs
+    ? new Date(startMs).toISOString().replace(/\.\d{3}Z$/, "Z")
+    : "";
+
+  for (const market of event.markets ?? []) {
+    const tl = market.tableLayout;
+    if (!tl) continue;
+
+    const mtype: string = market.type || "";
+    const mname: string = market.name || "";
+    let marketName = EVENT_MARKET_TYPES[mtype];
+    if (!marketName) {
+      if (mname.includes("Total Points") || mname.includes("Poeni")) {
+        marketName = "points";
+      } else if (mname.includes("Total Rebounds") || mname.includes("Skokovi")) {
+        marketName = "rebounds";
+      } else if (mname.includes("Total Assists") || mname.includes("Asistencije")) {
+        marketName = "assists";
+      } else if (mname.includes("Three-Pointers") || mname.includes("3-Point")) {
+        marketName = "three_pointers";
+      }
+    }
+    if (!marketName) continue;
+
+    const groupMap: Record<string, string> = {};
+    for (const g of tl.groups ?? []) {
+      if (g.id && g.title) groupMap[g.id] = g.title;
+    }
+
+    for (const row of tl.rows ?? []) {
+      const playerRaw: string = (row.title || row.name || "").trim();
+      if (!playerRaw) continue;
+      const player = toCanonicalName(playerRaw);
+      const team = groupMap[row.groupId] ?? "";
+
+      const candidates: [number, number][] = [];
+      for (const gs of row.groupSelections ?? []) {
+        for (const sel of gs.selections ?? []) {
+          const line = parseThreshold(sel.name || "");
+          const price = sel.price;
+          if (line !== null && price !== undefined && price !== null) {
+            candidates.push([line, Number(price)]);
+          }
+        }
+      }
+
+      const best = pickBestThreshold(candidates);
+      if (best === null) continue;
+      const [line, overOdds] = best;
+
+      records.push({
+        league: leagueLabel,
+        game,
+        team,
+        player,
+        market: marketName,
+        line,
+        over_odds_decimal: overOdds,
+        under_odds_decimal: null,
+        bookmaker: BOOKMAKER_NAME,
+        kickoff_time: kickoffTime,
+        updated_at: timestamp,
+      });
+    }
+  }
+
+  return records;
+}
+
+async function fetchLeagueEventProps(leaguePath: string, leagueLabel: string): Promise<PropRecord[]> {
+  const records: PropRecord[] = [];
+  const leagueUrl = `${BASE}/${leaguePath}/?${REQ_PARAMS}`;
+  const data = await get(leagueUrl);
+  const now = Date.now();
+
+  const events: any[] = [];
+  for (const block of data?.data?.blocks ?? []) {
+    for (const event of block.events ?? []) {
+      events.push(event);
+    }
+  }
+
+  const upcomingEvents = events.filter(
+    (e) => e.url && Math.abs((e.startTime ?? 0) - now) < 36 * 3600 * 1000
+  );
+
+  for (const event of upcomingEvents) {
+    const matchApiUrl = `https://en.stoiximan.gr/api${event.url}?${REQ_PARAMS}`;
+    try {
+      const matchData = await get(matchApiUrl);
+      const matchRecords = parseMatchEventProps(matchData, leagueLabel);
+      records.push(...matchRecords);
+    } catch (exc) {
+      console.error(`[stoiximan] match fetch failed ${event.url}:`, exc);
+    }
+  }
+
+  return records;
+}
+
 async function fetchAllStoiximanProps(): Promise<PropRecord[]> {
   const allRecords: PropRecord[] = [];
   for (const leagueInfo of SUPPORTED_LEAGUES) {
+    const leagueRecords: PropRecord[] = [];
+
+    // 1. Try league-level markets first
     for (const [marketType, marketName] of Object.entries(PROP_MARKET_TYPES)) {
       try {
         const data = await fetchLeagueMarket(leagueInfo.path, marketType);
-        allRecords.push(...parseLeagueMarket(data, leagueInfo.league, marketName));
-      } catch (exc) {
-        console.error(`[stoiximan] failed ${leagueInfo.path}/${marketType}:`, exc);
+        const recs = parseLeagueMarket(data, leagueInfo.league, marketName);
+        leagueRecords.push(...recs);
+      } catch {
+        // ignore
       }
     }
+
+    // 2. Fallback to match-level event scanning
+    if (leagueRecords.length === 0) {
+      try {
+        const recs = await fetchLeagueEventProps(leagueInfo.path, leagueInfo.league);
+        leagueRecords.push(...recs);
+      } catch (exc) {
+        console.error(`[stoiximan] failed league events ${leagueInfo.path}:`, exc);
+      }
+    }
+
+    allRecords.push(...leagueRecords);
   }
   return allRecords;
 }

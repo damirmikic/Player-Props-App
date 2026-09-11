@@ -44,12 +44,21 @@ SUPPORTED_LEAGUES = [
     {"path": "spain/liga-endesa/438g", "league": "ACB"},
     {"path": "usa/wnba/440g",           "league": "WNBA"},
     {"path": "israel/super-league/1042g", "league": "Izrael"},
+    {"path": "international/club-friendlies/16726", "league": "Club Friendly"},
+    {"path": "euroleague/euroleague/439g", "league": "Euroleague"},
 ]
 
 PROP_MARKET_TYPES = {
     "playerspoints":   "points",
     "playersrebounds": "rebounds",
     "playersassists":  "assists",
+}
+
+EVENT_MARKET_TYPES = {
+    "PLNP": "points",
+    "PLNR": "rebounds",
+    "PLNA": "assists",
+    "PLN3": "three_pointers",
 }
 
 _CACHE_FILE        = Path(__file__).resolve().parent / "stoiximan_cache.json"
@@ -131,10 +140,10 @@ def parse_league_market(
                 if not tl:
                     continue
 
-                group_map = {g["id"]: g["title"] for g in tl.get("groups", [])}
+                group_map = {g["id"]: g["title"] for g in tl.get("groups", []) if "id" in g and "title" in g}
 
                 for row in tl.get("rows", []):
-                    player_raw = row.get("title", "").strip()
+                    player_raw = (row.get("title") or row.get("name") or "").strip()
                     if not player_raw:
                         continue
                     player = to_canonical_name(player_raw)
@@ -171,16 +180,140 @@ def parse_league_market(
     return records
 
 
+def parse_match_event_props(data: dict, league_label: str) -> list[PropRecord]:
+    """Parse player props from a single event match detail payload."""
+    records = []
+    timestamp = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+    event = data.get("data", {}).get("event", {})
+    if not event:
+        return records
+
+    raw_name = event.get("name", "")
+    parts = re.split(r"\s+-\s+", raw_name)
+    game = f"{parts[1]} @ {parts[0]}" if len(parts) == 2 else raw_name
+
+    start_ms = event.get("startTime", 0)
+    kickoff_time = (
+        datetime.datetime.utcfromtimestamp(start_ms / 1000)
+        .strftime("%Y-%m-%dT%H:%M:%SZ")
+        if start_ms else ""
+    )
+
+    for market in event.get("markets", []):
+        tl = market.get("tableLayout")
+        if not tl:
+            continue
+
+        mtype = market.get("type", "")
+        mname = market.get("name", "")
+        market_name = EVENT_MARKET_TYPES.get(mtype)
+        if not market_name:
+            if "Total Points" in mname or "Poeni" in mname:
+                market_name = "points"
+            elif "Total Rebounds" in mname or "Skokovi" in mname:
+                market_name = "rebounds"
+            elif "Total Assists" in mname or "Asistencije" in mname:
+                market_name = "assists"
+            elif "Three-Pointers" in mname or "3-Point" in mname:
+                market_name = "three_pointers"
+
+        if not market_name:
+            continue
+
+        group_map = {g["id"]: g["title"] for g in tl.get("groups", []) if "id" in g and "title" in g}
+
+        for row in tl.get("rows", []):
+            player_raw = (row.get("title") or row.get("name") or "").strip()
+            if not player_raw:
+                continue
+            player = to_canonical_name(player_raw)
+            team   = group_map.get(row.get("groupId", ""), "")
+
+            candidates: list[tuple[float, float]] = []
+            for gs in row.get("groupSelections", []):
+                for sel in gs.get("selections", []):
+                    line = _parse_threshold(sel.get("name", ""))
+                    price = sel.get("price")
+                    if line is not None and price is not None:
+                        candidates.append((line, float(price)))
+
+            best = _pick_best_threshold(candidates)
+            if best is None:
+                continue
+            line, over_odds = best
+            records.append(
+                PropRecord(
+                    league=league_label,
+                    game=game,
+                    team=team,
+                    player=player,
+                    market=market_name,
+                    line=line,
+                    over_odds_decimal=over_odds,
+                    under_odds_decimal=None,
+                    bookmaker=BOOKMAKER_NAME,
+                    kickoff_time=kickoff_time,
+                    updated_at=timestamp,
+                )
+            )
+    return records
+
+
+def fetch_league_event_props(league_path: str, league_label: str) -> list[PropRecord]:
+    """Fetch all upcoming match events in a league and extract player props."""
+    records: list[PropRecord] = []
+    league_url = f"{_BASE}/{league_path}/?{_REQ_PARAMS}"
+    data = _get(league_url)
+    now = time.time()
+
+    events = []
+    for block in data.get("data", {}).get("blocks", []):
+        for event in block.get("events", []):
+            events.append(event)
+
+    # Filter events scheduled within the next 36 hours (or recently started)
+    upcoming_events = [
+        e for e in events
+        if e.get("url") and abs((e.get("startTime", 0) / 1000) - now) < 36 * 3600
+    ]
+
+    for event in upcoming_events:
+        event_url = event["url"]
+        match_api_url = f"https://en.stoiximan.gr/api{event_url}?{_REQ_PARAMS}"
+        try:
+            match_data = _get(match_api_url)
+            match_records = parse_match_event_props(match_data, league_label)
+            records.extend(match_records)
+        except Exception as exc:
+            print(f"[stoiximan] match fetch failed {event_url}: {exc}")
+
+    return records
+
+
 def fetch_all_stoiximan_props() -> list[PropRecord]:
     all_records: list[PropRecord] = []
     for league_info in SUPPORTED_LEAGUES:
+        league_path = league_info["path"]
+        league_label = league_info["league"]
+        league_records: list[PropRecord] = []
+
+        # 1. Try league-level markets first (fastest, standard for WNBA/ACB)
         for market_type, market_name in PROP_MARKET_TYPES.items():
             try:
-                data = fetch_league_market(league_info["path"], market_type)
-                records = parse_league_market(data, league_info["league"], market_name)
-                all_records.extend(records)
+                data = fetch_league_market(league_path, market_type)
+                records = parse_league_market(data, league_label, market_name)
+                league_records.extend(records)
+            except Exception:
+                pass
+
+        # 2. If league-level returned nothing, fallback to scanning individual match events
+        if not league_records:
+            try:
+                league_records = fetch_league_event_props(league_path, league_label)
             except Exception as exc:
-                print(f"[stoiximan] failed {league_info['path']}/{market_type}: {exc}")
+                print(f"[stoiximan] failed league events {league_path}: {exc}")
+
+        all_records.extend(league_records)
     return all_records
 
 
