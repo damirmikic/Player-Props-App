@@ -110,5 +110,14 @@ export function toCanonicalLeague(raw: string): string {
   if (!name) {
     return name;
   }
-  return LEAGUE_ALIASES[name] ?? name;
+  if (LEAGUE_ALIASES[name]) {
+    return LEAGUE_ALIASES[name];
+  }
+  const nameLower = name.toLowerCase();
+  for (const [k, v] of Object.entries(LEAGUE_ALIASES)) {
+    if (k.toLowerCase() === nameLower) {
+      return v;
+    }
+  }
+  return name;
 }

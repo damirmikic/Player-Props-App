@@ -171,4 +171,11 @@ def to_canonical_league(raw: str) -> str:
     name = raw.strip()
     if not name:
         return name
-    return _get_league_aliases().get(name, name)
+    aliases = _get_league_aliases()
+    if name in aliases:
+        return aliases[name]
+    name_lower = name.lower()
+    for k, v in aliases.items():
+        if k.lower() == name_lower:
+            return v
+    return name

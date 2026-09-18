@@ -46,15 +46,29 @@ const ODDS_TARGET = 1.95;
 const ODDS_LO = 1.7;
 const ODDS_HI = 2.2;
 
-const HEADERS = {
-  Accept: "application/json",
+const HEADERS: Record<string, string> = {
+  Accept: "application/json, text/plain, */*",
+  "Accept-Language": "en-US,en;q=0.9,el;q=0.8",
   "User-Agent":
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
     "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+  Referer: "https://en.stoiximan.gr/",
+  Origin: "https://en.stoiximan.gr",
+  "Sec-Ch-Ua": '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
+  "Sec-Ch-Ua-Mobile": "?0",
+  "Sec-Ch-Ua-Platform": '"Windows"',
+  "Sec-Fetch-Dest": "empty",
+  "Sec-Fetch-Mode": "cors",
+  "Sec-Fetch-Site": "same-origin",
 };
 
 async function get(url: string): Promise<any> {
   const response = await fetch(url, { headers: HEADERS });
+  if (!response.ok) {
+    const text = await response.text();
+    console.error(`[stoiximan] HTTP ${response.status} ${response.statusText} for ${url}: ${text.slice(0, 300)}`);
+    return null;
+  }
   return response.json();
 }
 
