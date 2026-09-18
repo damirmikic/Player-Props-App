@@ -41,6 +41,8 @@ const TOURNAMENT_NAMES: Record<number, string> = {
   6363: "World Cup Women",
   6364: "World Cup Women",
   6751: "World Cup Women",
+  101815: "Euroleague Supercup",
+  19114: "Euroleague",
 };
 
 const PLAYER_PROP_MARKETS: Record<number, string> = {
