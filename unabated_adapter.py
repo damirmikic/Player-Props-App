@@ -28,7 +28,10 @@ EXCLUDED_BOOKMAKERS = {
     "splash sports",
     "sportsbetting",
     "sugarhouse",
+    "the score us",
+    "thescore us",
     "underdog fantasy",
+    "underdog prediction market",
 }
 BET_TYPE_MARKETS = {
     73: "points",

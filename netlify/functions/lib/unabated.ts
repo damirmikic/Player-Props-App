@@ -29,7 +29,10 @@ const EXCLUDED_BOOKMAKERS = new Set([
   "splash sports",
   "sportsbetting",
   "sugarhouse",
+  "the score us",
+  "thescore us",
   "underdog fantasy",
+  "underdog prediction market",
 ]);
 
 const BET_TYPE_MARKETS: Record<number, string> = {
