@@ -1,6 +1,6 @@
 # Player Props Odds Comparison App
 
-A lightweight, high-performance app for comparing basketball player prop odds across multiple sportsbooks. Covers **WNBA**, **Euroleague**, **Euroleague Supercup**, **ACB**, **BBL (Germany)**, **Lega A**, **Izrael**, **Club Friendlies**, and international tournaments.
+A lightweight, high-performance app for comparing basketball player prop odds across multiple sportsbooks. Covers **WNBA**, **Euroleague** (including Supercup), **ACB**, **BBL (Germany)**, **Lega A**, **Izrael**, **Club Friendlies**, and international tournaments.
 
 ## Run Locally
 
@@ -33,11 +33,11 @@ npx tsc --noEmit
 | Adapter | Leagues Covered | Cache / Fetch Strategy | Notes |
 |---|---|---|---|
 | [Unabated](unabated_adapter.py) / [TS](netlify/functions/lib/unabated.ts) | WNBA | Live fetch (no cache) | Multi-book US odds. Automatically filters out DFS/fantasy books and prediction markets (Underdog, PrizePicks, Sleeper, TheScore US, Kalshi, etc.). |
-| [Superbet](superbet_adapter.py) / [TS](netlify/functions/lib/superbet.ts) | WNBA, ACB, Lega A, Izrael, BBL, Euroleague, Euroleague Supercup, Club Friendlies | 5-minute TTL (stale-while-revalidate) | Serbian market prices ("Više od" / "Manje od"). Category & tournament ID resolution. |
-| [Stoiximan](stoiximan_adapter.py) / [TS](netlify/functions/lib/stoiximan.ts) | WNBA, ACB, Euroleague, Euroleague Supercup, BBL, Izrael, Club Friendlies | 5-minute TTL (stale-while-revalidate) | Greek bookmaker. Offers "N+" threshold bets converted to Over (line = N − 0.5) with target odds closest to 1.95. |
-| [MaxBet](maxbet_adapter.py) / [TS](netlify/functions/lib/maxbet.ts) | WNBA, ACB, BBL, Euroleague Supercup, Club Friendlies | 5-minute TTL (stale-while-revalidate) | Serbian bookmaker. Reconstructs game matchups by matching kickoff time slots. |
-| [AdmiralBet](admiralbet_adapter.py) / [TS](netlify/functions/lib/admiralbet.ts) | WNBA, Euroleague Supercup, Prijateljske / Friendlies | 5-minute TTL (stale-while-revalidate) | Dedicated `sportId == 123` ("Košarka igrači"). Matches standard lines closest to 1.90. |
-| [Merkur](merkur_adapter.py) / [TS](netlify/functions/lib/merkur.ts) | WNBA, ACB, Lega A, Izrael, BBL | 5-minute TTL (stale-while-revalidate) | Merkur Xtip REST API. Strips Serbian "Igrači" suffixes automatically. |
+| [Superbet](superbet_adapter.py) / [TS](netlify/functions/lib/superbet.ts) | WNBA, ACB, Lega A, Izrael, BBL, Euroleague, Club Friendlies | 5-minute TTL (stale-while-revalidate) | Serbian market prices ("Više od" / "Manje od"). Category & tournament ID resolution. |
+| [Stoiximan](stoiximan_adapter.py) / [TS](netlify/functions/lib/stoiximan.ts) | WNBA, ACB, Euroleague, BBL, Izrael, Club Friendlies | 5-minute TTL (stale-while-revalidate) | Greek bookmaker. Offers "N+" threshold bets converted to Over (line = N − 0.5) with target odds closest to 1.95. |
+| [MaxBet](maxbet_adapter.py) / [TS](netlify/functions/lib/maxbet.ts) | WNBA, ACB, BBL, Euroleague, Club Friendlies | 5-minute TTL (stale-while-revalidate) | Serbian bookmaker. Reconstructs game matchups by matching kickoff time slots. |
+| [AdmiralBet](admiralbet_adapter.py) / [TS](netlify/functions/lib/admiralbet.ts) | WNBA, Euroleague, Prijateljske / Friendlies | 5-minute TTL (stale-while-revalidate) | Dedicated `sportId == 123` ("Košarka igrači"). Matches standard lines closest to 1.90. |
+| [Merkur](merkur_adapter.py) / [TS](netlify/functions/lib/merkur.ts) | WNBA, ACB, Lega A, Izrael, BBL, Euroleague | 5-minute TTL (stale-while-revalidate) | Merkur Xtip REST API. Strips Serbian "Igrači" suffixes automatically. |
 | [Mozzart](mozzart_adapter.py) / [TS](netlify/functions/lib/mozzart.ts) | Active "...Players" competitions | Live fetch (no cache) | Three-step discovery via Mozzart API. Monitoring endpoint exposed at `GET /api/mozzart-leagues`. |
 
 Cached adapters use **stale-while-revalidate**:
