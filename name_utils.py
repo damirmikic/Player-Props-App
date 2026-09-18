@@ -26,8 +26,8 @@ from pathlib import Path
 _ALIAS_FILE        = Path(__file__).resolve().parent / "name_aliases.json"
 _LEAGUE_ALIAS_FILE = Path(__file__).resolve().parent / "league_aliases.json"
 
-# Matches Merkur's "Last F." format: one or more words, space, capital letter, period
-_CANONICAL_RE = re.compile(r'^.+\s+[A-Z]\.$')
+# Matches Merkur's "Last F." or "Last Abbr." format: one or more words, space, letter(s), period
+_CANONICAL_RE = re.compile(r'^(.+)\s+([A-Za-z]+)\.$')
 
 # Matches Mozzart's "F.Last" or "Abbr.Last" format: letters, period, no space, surname
 _INITIAL_DOT_LAST_RE = re.compile(r'^([A-Za-z]+)\.([A-Za-z\-\']+)$')
@@ -131,9 +131,13 @@ def to_canonical_name(raw: str) -> str:
     if alias:
         return alias
 
-    # 4. Already in canonical form
-    if _CANONICAL_RE.match(name):
-        return name
+    # 4. Already in canonical form or "Last Abbr." (e.g. "Wright McK.")
+    m = _CANONICAL_RE.match(name)
+    if m:
+        last, abbr = m.groups()
+        if abbr.upper() not in ("JR", "SR", "II", "III", "IV"):
+            initial = abbr[0].upper()
+            return f"{last} {initial}."
 
     # 5. "F.Last" or "Abbr.Last" (Mozzart) → "Last F."
     m = _INITIAL_DOT_LAST_RE.match(name)

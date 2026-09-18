@@ -12,8 +12,8 @@
 import nameAliasesRaw from "./name-aliases.json" with { type: "json" };
 import leagueAliasesRaw from "./league-aliases.json" with { type: "json" };
 
-// Matches Merkur's "Last F." format: one or more words, space, capital letter, period
-const CANONICAL_RE = /^.+\s+[A-Z]\.$/;
+// Matches Merkur's "Last F." or "Last Abbr." format: one or more words, space, letter(s), period
+const CANONICAL_RE = /^(.+)\s+([A-Za-z]+)\.$/;
 
 // Matches Mozzart's "F.Last" or "Abbr.Last" format: letters, period, no space, surname
 const INITIAL_DOT_LAST_RE = /^([A-Za-z]+)\.([A-Za-z\-']+)$/;
@@ -80,8 +80,14 @@ export function toCanonicalName(raw: string): string {
     return alias;
   }
 
-  if (CANONICAL_RE.test(name)) {
-    return name;
+  // 4. Already in canonical form or "Last Abbr." (e.g. "Wright McK.")
+  const mCanonical = CANONICAL_RE.exec(name);
+  if (mCanonical) {
+    const [, last, abbr] = mCanonical;
+    if (!["JR", "SR", "II", "III", "IV"].includes(abbr.toUpperCase())) {
+      const initial = abbr[0].toUpperCase();
+      return `${last} ${initial}.`;
+    }
   }
 
   // 5. "F.Last" or "Abbr.Last" (Mozzart) → "Last F."
