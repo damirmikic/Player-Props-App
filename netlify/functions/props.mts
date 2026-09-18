@@ -15,6 +15,10 @@ import {
   loadAdmiralbetProps,
   ADMIRALBET_BASE_URL,
 } from "./lib/admiralbet.js";
+import {
+  loadBalkanbetProps,
+  BALKANBET_BASE_URL,
+} from "./lib/balkanbet.js";
 import { mergeAndNormalize } from "./lib/merge.js";
 import { applyMovementDeltas } from "./lib/movement.js";
 import type { PropRecord } from "./lib/types.js";
@@ -77,6 +81,14 @@ export default async (req: Request, context: Context) => {
     console.error("[admiralbet] fetch failed —", exc);
   }
 
+  // --- BalkanBet RS (multi-league, single book) ---
+  let balkanbetRecords: PropRecord[] = [];
+  try {
+    balkanbetRecords = await loadBalkanbetProps(context);
+  } catch (exc) {
+    console.error("[balkanbet] fetch failed —", exc);
+  }
+
   const allRecords = [
     ...unabatedRecords,
     ...merkurRecords,
@@ -85,6 +97,7 @@ export default async (req: Request, context: Context) => {
     ...maxbetRecords,
     ...mozzartRecords,
     ...admiralbetRecords,
+    ...balkanbetRecords,
   ];
 
   const { records, leagues, markets } = mergeAndNormalize(allRecords);
@@ -104,6 +117,7 @@ export default async (req: Request, context: Context) => {
       maxbet: MAXBET_BASE_URL,
       mozzart: MOZZART_BASE_URL,
       admiralbet: ADMIRALBET_BASE_URL,
+      balkanbet: BALKANBET_BASE_URL,
     },
   };
 

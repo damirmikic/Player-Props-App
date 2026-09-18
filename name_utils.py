@@ -144,10 +144,21 @@ def to_canonical_name(raw: str) -> str:
 
     # 6. Full name → "Last F." (handling suffixes like Jr, Sr, II, III, IV)
     parts = name.split()
-    if len(parts) >= 3 and parts[-1].rstrip(".").upper() in ("JR", "SR", "II", "III", "IV"):
-        last = parts[-2]
-        first_initial = parts[0][0].upper()
-        suffix = parts[-1].rstrip(".")
+    if len(parts) >= 2 and parts[-1].rstrip(".").upper() in ("JR", "SR", "II", "III", "IV"):
+        suffix = parts[-1].rstrip(".").upper()
+        main = parts[:-1]
+        if len(main) >= 2:
+            last = main[-1]
+            first_initial = main[0][0].upper()
+        else:
+            if "." in main[0]:
+                init_token, last = main[0].split(".", 1)
+                first_initial = init_token[0].upper()
+            else:
+                last = main[0]
+                first_initial = ""
+        if suffix in ("II", "III", "IV") or not first_initial:
+            return f"{last} {first_initial}." if first_initial else last
         return f"{last} {first_initial}. {suffix}"
     elif len(parts) >= 2:
         last = parts[-1]

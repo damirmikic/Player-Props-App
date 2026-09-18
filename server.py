@@ -19,6 +19,7 @@ import stoiximan_adapter
 import maxbet_adapter
 import mozzart_adapter
 import admiralbet_adapter
+import balkanbet_adapter
 from unabated_adapter import build_highlights
 from name_utils import to_canonical_name, to_canonical_league
 
@@ -156,10 +157,17 @@ def load_all_props():
     except Exception as exc:
         print(f"[admiralbet] fetch failed — {exc}")
 
+    # --- BalkanBet RS (multi-league, single book) ---
+    balkanbet_records = []
+    try:
+        balkanbet_records = balkanbet_adapter.load_balkanbet_props()
+    except Exception as exc:
+        print(f"[balkanbet] fetch failed — {exc}")
+
     all_records = (
         unabated_records + merkur_records + superbet_records
         + stoiximan_records + maxbet_records + mozzart_records
-        + admiralbet_records
+        + admiralbet_records + balkanbet_records
     )
 
     # Temporarily hidden markets — pull back out once ready to show them again.

@@ -93,12 +93,28 @@ export function toCanonicalName(raw: string): string {
   }
 
   const parts = name.split(/\s+/).filter(Boolean);
-  if (parts.length >= 3) {
+  if (parts.length >= 2) {
     const lastPart = parts[parts.length - 1].replace(/\.+$/, "").toUpperCase();
     if (["JR", "SR", "II", "III", "IV"].includes(lastPart)) {
-      const last = parts[parts.length - 2];
-      const firstInitial = parts[0][0].toUpperCase();
       const suffix = parts[parts.length - 1].replace(/\.+$/, "");
+      const main = parts.slice(0, -1);
+      let last = "";
+      let firstInitial = "";
+      if (main.length >= 2) {
+        last = main[main.length - 1];
+        firstInitial = main[0][0].toUpperCase();
+      } else {
+        if (main[0].includes(".")) {
+          const [initToken, l] = main[0].split(".");
+          firstInitial = initToken[0].toUpperCase();
+          last = l;
+        } else {
+          last = main[0];
+        }
+      }
+      if (["II", "III", "IV"].includes(lastPart) || !firstInitial) {
+        return firstInitial ? `${last} ${firstInitial}.` : last;
+      }
       return `${last} ${firstInitial}. ${suffix}`;
     }
   }

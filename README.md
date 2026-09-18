@@ -37,6 +37,7 @@ npx tsc --noEmit
 | [Stoiximan](stoiximan_adapter.py) / [TS](netlify/functions/lib/stoiximan.ts) | WNBA, ACB, Euroleague, BBL, Izrael, Club Friendlies | 5-minute TTL (stale-while-revalidate) | Greek bookmaker. Offers "N+" threshold bets converted to Over (line = N − 0.5) with target odds closest to 1.95. |
 | [MaxBet](maxbet_adapter.py) / [TS](netlify/functions/lib/maxbet.ts) | WNBA, ACB, BBL, Euroleague, Club Friendlies | 5-minute TTL (stale-while-revalidate) | Serbian bookmaker. Reconstructs game matchups by matching kickoff time slots. |
 | [AdmiralBet](admiralbet_adapter.py) / [TS](netlify/functions/lib/admiralbet.ts) | WNBA, Euroleague, Prijateljske / Friendlies | 5-minute TTL (stale-while-revalidate) | Dedicated `sportId == 123` ("Košarka igrači"). Matches standard lines closest to 1.90. |
+| [BalkanBet](balkanbet_adapter.py) / [TS](netlify/functions/lib/balkanbet.ts) | WNBA, Euroleague, BBL, Club Friendlies | 5-minute TTL (stale-while-revalidate) | NSoft sports distribution API (`sportId == 273`). Standard lines matched via `favourite: true`. |
 | [Merkur](merkur_adapter.py) / [TS](netlify/functions/lib/merkur.ts) | WNBA, ACB, Lega A, Izrael, BBL, Euroleague | 5-minute TTL (stale-while-revalidate) | Merkur Xtip REST API. Strips Serbian "Igrači" suffixes automatically. |
 | [Mozzart](mozzart_adapter.py) / [TS](netlify/functions/lib/mozzart.ts) | Active "...Players" competitions | Live fetch (no cache) | Three-step discovery via Mozzart API. Monitoring endpoint exposed at `GET /api/mozzart-leagues`. |
 
