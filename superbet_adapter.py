@@ -52,6 +52,7 @@ CATEGORY_NAMES: dict[int, str] = {
     56:  "Lega A",
     185: "Izrael",
     36:  "FIBA Qualifiers",
+    157: "BBL",
 }
 
 # categoryId 36 is a shared "international/other" bucket that Superbet

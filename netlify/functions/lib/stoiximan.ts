@@ -24,6 +24,7 @@ const SUPPORTED_LEAGUES = [
   { path: "international/club-friendlies/16726", league: "Club Friendly" },
   { path: "euroleague/euroleague/439g", league: "Euroleague" },
   { path: "euroleague/euroleague-super-cup/1127g", league: "Euroleague Supercup" },
+  { path: "germany/bbl/458g", league: "BBL" },
 ];
 
 const PROP_MARKET_TYPES: Record<string, string> = {

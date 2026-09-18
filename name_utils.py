@@ -141,9 +141,14 @@ def to_canonical_name(raw: str) -> str:
         initial, last = m.groups()
         return f"{last} {initial}."
 
-    # 6. Full name → "Last F."
+    # 6. Full name → "Last F." (handling suffixes like Jr, Sr, II, III, IV)
     parts = name.split()
-    if len(parts) >= 2:
+    if len(parts) >= 3 and parts[-1].rstrip(".").upper() in ("JR", "SR", "II", "III", "IV"):
+        last = parts[-2]
+        first_initial = parts[0][0].upper()
+        suffix = parts[-1].rstrip(".")
+        return f"{last} {first_initial}. {suffix}"
+    elif len(parts) >= 2:
         last = parts[-1]
         first_initial = parts[0][0].upper()
         return f"{last} {first_initial}."

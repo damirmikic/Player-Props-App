@@ -91,6 +91,15 @@ export function toCanonicalName(raw: string): string {
   }
 
   const parts = name.split(/\s+/).filter(Boolean);
+  if (parts.length >= 3) {
+    const lastPart = parts[parts.length - 1].replace(/\.+$/, "").toUpperCase();
+    if (["JR", "SR", "II", "III", "IV"].includes(lastPart)) {
+      const last = parts[parts.length - 2];
+      const firstInitial = parts[0][0].toUpperCase();
+      const suffix = parts[parts.length - 1].replace(/\.+$/, "");
+      return `${last} ${firstInitial}. ${suffix}`;
+    }
+  }
   if (parts.length >= 2) {
     const last = parts[parts.length - 1];
     const firstInitial = parts[0][0].toUpperCase();
