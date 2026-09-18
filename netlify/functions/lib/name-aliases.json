@@ -141,5 +141,11 @@
   "Smith Ste.": "Smith S.",
   "Smith Ste": "Smith S.",
   "Ste. S.": "Smith S.",
-  "Stefan Smith": "Smith S."
+  "Stefan Smith": "Smith S.",
+  "Ste.Smith": "Smith S.",
+  "Ste. Smith": "Smith S.",
+  "Cob.Williams": "Williams C.",
+  "Cob. Williams": "Williams C.",
+  "Cobi Williams": "Williams C.",
+  "Cobie Williams": "Williams C."
 }

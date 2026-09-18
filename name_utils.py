@@ -29,8 +29,8 @@ _LEAGUE_ALIAS_FILE = Path(__file__).resolve().parent / "league_aliases.json"
 # Matches Merkur's "Last F." format: one or more words, space, capital letter, period
 _CANONICAL_RE = re.compile(r'^.+\s+[A-Z]\.$')
 
-# Matches Mozzart's "F.Last" format: capital letter, period, no space, surname
-_INITIAL_DOT_LAST_RE = re.compile(r'^([A-Z])\.([A-Za-z\-\']+)$')
+# Matches Mozzart's "F.Last" or "Abbr.Last" format: letters, period, no space, surname
+_INITIAL_DOT_LAST_RE = re.compile(r'^([A-Za-z]+)\.([A-Za-z\-\']+)$')
 
 _DIACRITICS_TABLE = {
     'Đ': 'Dj', 'đ': 'dj',
@@ -135,10 +135,11 @@ def to_canonical_name(raw: str) -> str:
     if _CANONICAL_RE.match(name):
         return name
 
-    # 5. "F.Last" (Mozzart) → "Last F."
+    # 5. "F.Last" or "Abbr.Last" (Mozzart) → "Last F."
     m = _INITIAL_DOT_LAST_RE.match(name)
     if m:
-        initial, last = m.groups()
+        abbr, last = m.groups()
+        initial = abbr[0].upper()
         return f"{last} {initial}."
 
     # 6. Full name → "Last F." (handling suffixes like Jr, Sr, II, III, IV)

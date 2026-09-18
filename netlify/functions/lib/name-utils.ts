@@ -15,8 +15,8 @@ import leagueAliasesRaw from "./league-aliases.json" with { type: "json" };
 // Matches Merkur's "Last F." format: one or more words, space, capital letter, period
 const CANONICAL_RE = /^.+\s+[A-Z]\.$/;
 
-// Matches Mozzart's "F.Last" format: capital letter, period, no space, surname
-const INITIAL_DOT_LAST_RE = /^([A-Z])\.([A-Za-z\-']+)$/;
+// Matches Mozzart's "F.Last" or "Abbr.Last" format: letters, period, no space, surname
+const INITIAL_DOT_LAST_RE = /^([A-Za-z]+)\.([A-Za-z\-']+)$/;
 
 const DIACRITICS_MAP: Record<string, string> = {
   Đ: "Dj",
@@ -84,9 +84,11 @@ export function toCanonicalName(raw: string): string {
     return name;
   }
 
+  // 5. "F.Last" or "Abbr.Last" (Mozzart) → "Last F."
   const m = INITIAL_DOT_LAST_RE.exec(name);
   if (m) {
-    const [, initial, last] = m;
+    const [, abbr, last] = m;
+    const initial = abbr[0].toUpperCase();
     return `${last} ${initial}.`;
   }
 
