@@ -119,7 +119,7 @@ async function parseSuperbetProps(events: any[]): Promise<PropRecord[]> {
     game = game.replace(/\s*\([ŽWw]\)/g, "");
 
     // Superbet (European) lists Home vs Away. Unabated (US) lists Away @ Home.
-    const parts = game.split(/\s+(?:vs|-|·)\s+/);
+    const parts = game.split(/\s*·\s*|\s+(?:vs|-)\s+/);
     if (parts.length === 2) {
       game = `${parts[1]} @ ${parts[0]}`;
     } else {

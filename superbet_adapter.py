@@ -160,7 +160,7 @@ def parse_superbet_props(events: list[dict]) -> list[PropRecord]:
         game      = re.sub(r'\s*\([ŽWw]\)', '', game)
         
         # Superbet (European) lists Home vs Away. Unabated (US) lists Away @ Home.
-        parts = re.split(r'\s+(?:vs|-|·)\s+', game)
+        parts = re.split(r'\s*·\s*|\s+(?:vs|-)\s+', game)
         if len(parts) == 2:
             game = f"{parts[1]} @ {parts[0]}"
         else:

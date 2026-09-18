@@ -18,10 +18,12 @@ const BOOKMAKER_NAME = "Stoiximan";
 
 const SUPPORTED_LEAGUES = [
   { path: "spain/liga-endesa/438g", league: "ACB" },
+  { path: "spain/supercopa-endesa/471g", league: "ACB" },
   { path: "usa/wnba/440g", league: "WNBA" },
   { path: "israel/super-league/1042g", league: "Izrael" },
   { path: "international/club-friendlies/16726", league: "Club Friendly" },
   { path: "euroleague/euroleague/439g", league: "Euroleague" },
+  { path: "euroleague/euroleague-super-cup/1127g", league: "Euroleague Supercup" },
 ];
 
 const PROP_MARKET_TYPES: Record<string, string> = {
