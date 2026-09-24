@@ -199,4 +199,18 @@ def to_canonical_league(raw: str) -> str:
     for k, v in aliases.items():
         if k.lower() == name_lower:
             return v
+
+    # Fallback: if competition name ends with " - Players", " Players", " - Igrači", etc.
+    base_match = re.sub(r'(?i)\s*(?:[-–—]\s*)?(?:players|igrači|igraci)$', '', name).strip()
+    if base_match and base_match != name:
+        if base_match in aliases:
+            return aliases[base_match]
+        base_lower = base_match.lower()
+        for k, v in aliases.items():
+            if k.lower() == base_lower:
+                return v
+        for v in aliases.values():
+            if v.lower() == base_lower:
+                return v
+
     return name

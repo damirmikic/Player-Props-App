@@ -152,5 +152,25 @@ export function toCanonicalLeague(raw: string): string {
       return v;
     }
   }
+
+  // Fallback: if competition name ends with " - Players", " Players", " - Igrači", etc.
+  const baseMatch = name.replace(/\s*(?:[-–—]\s*)?(?:players|igrači|igraci)$/i, "").trim();
+  if (baseMatch && baseMatch !== name) {
+    if (LEAGUE_ALIASES[baseMatch]) {
+      return LEAGUE_ALIASES[baseMatch];
+    }
+    const baseLower = baseMatch.toLowerCase();
+    for (const [k, v] of Object.entries(LEAGUE_ALIASES)) {
+      if (k.toLowerCase() === baseLower) {
+        return v;
+      }
+    }
+    for (const v of Object.values(LEAGUE_ALIASES)) {
+      if (v.toLowerCase() === baseLower) {
+        return v;
+      }
+    }
+  }
+
   return name;
 }
