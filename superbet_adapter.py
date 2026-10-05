@@ -71,6 +71,7 @@ TOURNAMENT_NAMES: dict[int, str] = {
     6751: "World Cup Women",
     101815: "Euroleague",
     19114: "Euroleague",
+    92254: "ABA Liga",
 }
 
 

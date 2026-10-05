@@ -45,6 +45,7 @@ const TOURNAMENT_NAMES: Record<number, string> = {
   6751: "World Cup Women",
   101815: "Euroleague",
   19114: "Euroleague",
+  92254: "ABA Liga",
 };
 
 const PLAYER_PROP_MARKETS: Record<number, string> = {
