@@ -74,6 +74,15 @@ TOURNAMENT_NAMES: dict[int, str] = {
     101815: "Euroleague",
     19114: "Euroleague",
     92254: "ABA Liga",
+    # Eurocup
+    2388: "Eurocup",
+    2389: "Eurocup",
+    2390: "Eurocup",
+    2391: "Eurocup",
+    # Basketball Champions League
+    48572: "Champions League",
+    48573: "Champions League",
+    48574: "Champions League",
 }
 
 
