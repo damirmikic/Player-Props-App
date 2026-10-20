@@ -72,7 +72,7 @@ const PLAYER_PROP_MARKETS: Record<number, string> = {
   231182: "points",
 };
 
-const CACHE_STORE = "superbet-cache";
+const CACHE_STORE = "superbet-cache-v3";
 const CACHE_TTL_SECONDS = 300;
 
 const HEADERS = {
@@ -122,7 +122,27 @@ async function parseSuperbetProps(events: any[]): Promise<PropRecord[]> {
   const records: PropRecord[] = [];
   const timestamp = new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
 
-  for (const event of events) {
+  // Fetch event odds in parallel chunks of 10 so it completes in ~2s instead of 25s+
+  const CONCURRENCY = 10;
+  const eventsWithOdds: Array<{ event: any; oddsList: any[] }> = [];
+
+  for (let i = 0; i < events.length; i += CONCURRENCY) {
+    const chunk = events.slice(i, i + CONCURRENCY);
+    const chunkResults = await Promise.all(
+      chunk.map(async (event) => {
+        try {
+          const oddsList = await fetchEventOdds(event.eventId);
+          return { event, oddsList };
+        } catch (exc) {
+          console.error(`[superbet] failed to fetch event ${event.eventId}:`, exc);
+          return { event, oddsList: [] };
+        }
+      })
+    );
+    eventsWithOdds.push(...chunkResults);
+  }
+
+  for (const { event, oddsList } of eventsWithOdds) {
     let league = TOURNAMENT_NAMES[event.tournamentId ?? -1] ?? CATEGORY_NAMES[event.categoryId ?? -1];
     if (!league) {
       const cid = event.categoryId ?? "?";
@@ -140,16 +160,7 @@ async function parseSuperbetProps(events: any[]): Promise<PropRecord[]> {
       game = game.replace(/·/g, " @ ").replace(/ vs /g, " @ ").replace(/ - /g, " @ ");
     }
 
-    const eventId = event.eventId;
     const kickoffTime = (event.matchDate || "").replace(" ", "T") + "Z";
-
-    let oddsList: any[];
-    try {
-      oddsList = await fetchEventOdds(eventId);
-    } catch (exc) {
-      console.error(`[superbet] failed to fetch event ${eventId}:`, exc);
-      continue;
-    }
 
     // Group by (player, market, line) to pair over + under
     const groups = new Map<string, { over: number | null; under: number | null }>();

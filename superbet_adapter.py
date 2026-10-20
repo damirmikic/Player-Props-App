@@ -23,6 +23,7 @@ Prices are already in decimal format — no conversion needed.
 """
 from __future__ import annotations
 
+import concurrent.futures
 import datetime
 import json
 import re
@@ -163,7 +164,20 @@ def parse_superbet_props(events: list[dict]) -> list[PropRecord]:
     records = []
     timestamp = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    for event in events:
+    def _fetch_event(event: dict) -> tuple[dict, list[dict]]:
+        try:
+            return event, fetch_event_odds(event["eventId"])
+        except Exception as exc:
+            print(f"[superbet] failed to fetch event {event.get('eventId')}: {exc}")
+            return event, []
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        events_with_odds = list(executor.map(_fetch_event, events))
+
+    for event, odds_list in events_with_odds:
+        if not odds_list:
+            continue
+
         league    = TOURNAMENT_NAMES.get(event.get("tournamentId", -1))
         if league is None:
             league = CATEGORY_NAMES.get(event.get("categoryId", -1))
@@ -180,14 +194,7 @@ def parse_superbet_props(events: list[dict]) -> list[PropRecord]:
         else:
             game = game.replace("·", " @ ").replace(" vs ", " @ ").replace(" - ", " @ ")
             
-        event_id  = event["eventId"]
         kickoff_time = event.get("matchDate", "").replace(" ", "T") + "Z"
-
-        try:
-            odds_list = fetch_event_odds(event_id)
-        except Exception as exc:
-            print(f"[superbet] failed to fetch event {event_id}: {exc}")
-            continue
 
         # Group by (player, market, line) to pair over + under
         groups: dict[tuple, dict] = {}
