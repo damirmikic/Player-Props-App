@@ -6,13 +6,21 @@
 import { toCanonicalName } from "./name-utils.js";
 import type { PropRecord } from "./types.js";
 
+export const UNABATED_NBA_PROPS_URL =
+  "https://content.unabated.com/markets/v2/league/3/propodds.json";
 export const UNABATED_WNBA_PROPS_URL =
   "https://content.unabated.com/markets/v2/league/7/propodds.json";
+
+export const LEAGUE_MAP: Record<number, string> = {
+  3: "NBA",
+  7: "WNBA",
+};
 
 export const SUPPORTED_MARKETS = new Set(["points", "assists", "rebounds"]);
 
 const EXCLUDED_BOOKMAKERS = new Set([
   "betrivers",
+  "bookmaker",
   "bovada",
   "caesars",
   "draftkings pick6",
@@ -23,6 +31,8 @@ const EXCLUDED_BOOKMAKERS = new Set([
   "hard rock (s)",
   "kalshi",
   "parx",
+  "polymarket",
+  "polymarket us",
   "prizepicks",
   "prophet exchange",
   "sleeper",
@@ -43,7 +53,6 @@ const BET_TYPE_MARKETS: Record<number, string> = {
 
 const SIDE_OVER = "si0";
 const SIDE_UNDER = "si1";
-const LEAGUE = "WNBA";
 
 function americanToDecimal(odds: number | null | undefined): number | null {
   if (odds === null || odds === undefined) return null;
@@ -128,14 +137,45 @@ function cleanEventName(eventName: string | undefined, eventId: any): string {
   return eventName.replace(" - @ ", " @ ").replace(/^-+|-+$/g, "").trim();
 }
 
-export async function fetchUnabatedProps(): Promise<any> {
-  const response = await fetch(UNABATED_WNBA_PROPS_URL, {
+export async function fetchUnabatedPropsForLeague(leagueId: number): Promise<any> {
+  const url = `https://content.unabated.com/markets/v2/league/${leagueId}/propodds.json`;
+  const response = await fetch(url, {
     headers: {
       Accept: "application/json",
       "User-Agent": "PlayerPropsApp/0.1",
     },
   });
   return response.json();
+}
+
+export async function fetchUnabatedProps(): Promise<any> {
+  const leagueIds = Object.keys(LEAGUE_MAP).map(Number);
+  const results = await Promise.all(
+    leagueIds.map((id) =>
+      fetchUnabatedPropsForLeague(id).catch((err) => {
+        console.error(`[unabated] Failed to fetch league ${id}:`, err);
+        return null;
+      })
+    )
+  );
+
+  const combined: any = { odds: {}, people: {}, teams: {}, marketSources: [] };
+  const sourceIds = new Set<any>();
+
+  for (const r of results) {
+    if (!r) continue;
+    Object.assign(combined.odds, r.odds ?? {});
+    Object.assign(combined.people, r.people ?? {});
+    Object.assign(combined.teams, r.teams ?? {});
+    for (const source of r.marketSources ?? []) {
+      if (!sourceIds.has(source.id)) {
+        sourceIds.add(source.id);
+        combined.marketSources.push(source);
+      }
+    }
+  }
+
+  return combined;
 }
 
 export function parseUnabatedProps(raw: any): PropRecord[] {
@@ -149,7 +189,14 @@ export function parseUnabatedProps(raw: any): PropRecord[] {
   const records: PropRecord[] = [];
 
   for (const [oddsKey, rows] of Object.entries(raw.odds ?? {})) {
-    if (!oddsKey.startsWith("lg7:")) continue;
+    let league: string | undefined;
+    if (oddsKey.startsWith("lg")) {
+      const prefix = oddsKey.split(":")[0]?.slice(2);
+      if (prefix && !isNaN(Number(prefix))) {
+        league = LEAGUE_MAP[Number(prefix)];
+      }
+    }
+    if (!league) continue;
 
     for (const row of rows as any[]) {
       const market = BET_TYPE_MARKETS[row.betTypeId];
@@ -169,7 +216,7 @@ export function parseUnabatedProps(raw: any): PropRecord[] {
         const source = sources[bookId] ?? {};
         const bookmaker: string = source.name || `Book ${bookId}`;
         records.push({
-          league: LEAGUE,
+          league,
           game,
           team: team.abbreviation || "",
           player,

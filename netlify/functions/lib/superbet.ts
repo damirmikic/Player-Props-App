@@ -37,6 +37,8 @@ const CATEGORY_NAMES: Record<number, string> = {
 // disambiguate. tournamentId is the only field that varies per competition
 // within that bucket, so give it its own override table, checked first.
 const TOURNAMENT_NAMES: Record<number, string> = {
+  164: "NBA",
+  2172: "WNBA",
   2401: "Club Friendly",
   6361: "World Cup Women",
   6362: "World Cup Women",

@@ -8,10 +8,20 @@ import json
 from urllib.request import Request, urlopen
 
 
+from concurrent.futures import ThreadPoolExecutor
+
+UNABATED_NBA_PROPS_URL = "https://content.unabated.com/markets/v2/league/3/propodds.json"
 UNABATED_WNBA_PROPS_URL = "https://content.unabated.com/markets/v2/league/7/propodds.json"
+
+LEAGUE_MAP: dict[int, str] = {
+    3: "NBA",
+    7: "WNBA",
+}
+
 SUPPORTED_MARKETS = {"points", "assists", "rebounds"}
 EXCLUDED_BOOKMAKERS = {
     "betrivers",
+    "bookmaker",
     "bovada",
     "caesars",
     "draftkings pick6",
@@ -22,6 +32,8 @@ EXCLUDED_BOOKMAKERS = {
     "hard rock (s)",
     "kalshi",
     "parx",
+    "polymarket",
+    "polymarket us",
     "prizepicks",
     "prophet exchange",
     "sleeper",
@@ -40,7 +52,6 @@ BET_TYPE_MARKETS = {
 }
 SIDE_OVER = "si0"
 SIDE_UNDER = "si1"
-LEAGUE = "WNBA"
 
 
 @dataclass(frozen=True)
@@ -76,18 +87,22 @@ def load_player_props():
     records = parse_unabated_props(raw)
     filtered = [record for record in records if record.market in SUPPORTED_MARKETS]
     return {
-        "phase": "Phase 1: Live Unabated WNBA Ingestion",
-        "league": LEAGUE,
+        "phase": "Phase 1: Live Unabated Multi-League Ingestion",
+        "leagues": sorted(set(LEAGUE_MAP.values())),
         "markets": sorted(SUPPORTED_MARKETS),
         "records": [asdict(record) for record in filtered],
         "highlights": build_highlights(filtered),
-        "source": UNABATED_WNBA_PROPS_URL,
+        "sources": {
+            "NBA": UNABATED_NBA_PROPS_URL,
+            "WNBA": UNABATED_WNBA_PROPS_URL,
+        },
     }
 
 
-def fetch_unabated_props():
+def fetch_unabated_props_for_league(league_id: int) -> dict:
+    url = f"https://content.unabated.com/markets/v2/league/{league_id}/propodds.json"
     request = Request(
-        UNABATED_WNBA_PROPS_URL,
+        url,
         headers={
             "Accept": "application/json",
             "User-Agent": "PlayerPropsApp/0.1",
@@ -100,6 +115,26 @@ def fetch_unabated_props():
         return json.loads(body.decode("utf-8-sig"))
 
 
+def fetch_unabated_props() -> dict:
+    with ThreadPoolExecutor(max_workers=len(LEAGUE_MAP)) as executor:
+        results = list(executor.map(fetch_unabated_props_for_league, LEAGUE_MAP.keys()))
+
+    combined = {"odds": {}, "people": {}, "teams": {}, "marketSources": []}
+    source_ids = set()
+
+    for r in results:
+        combined["odds"].update(r.get("odds", {}))
+        combined["people"].update(r.get("people", {}))
+        combined["teams"].update(r.get("teams", {}))
+        for source in r.get("marketSources", []):
+            sid = source.get("id")
+            if sid not in source_ids:
+                source_ids.add(sid)
+                combined["marketSources"].append(source)
+
+    return combined
+
+
 def parse_unabated_props(raw):
     people = raw.get("people", {})
     teams = raw.get("teams", {})
@@ -107,7 +142,14 @@ def parse_unabated_props(raw):
     records = []
 
     for odds_key, rows in raw.get("odds", {}).items():
-        if not odds_key.startswith("lg7:"):
+        league_id = None
+        if odds_key.startswith("lg"):
+            prefix = odds_key.split(":")[0][2:]
+            if prefix.isdigit():
+                league_id = int(prefix)
+
+        league = LEAGUE_MAP.get(league_id)
+        if not league:
             continue
 
         for row in rows:
@@ -134,7 +176,7 @@ def parse_unabated_props(raw):
                 bookmaker = source.get("name") or f"Book {book_id}"
                 records.append(
                     PropRecord(
-                        league=LEAGUE,
+                        league=league,
                         game=game,
                         team=team.get("abbreviation") or "",
                         player=player,
