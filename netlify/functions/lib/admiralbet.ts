@@ -23,16 +23,16 @@ const EVENTS_URL_TEMPLATE =
   "?dateFrom={date_from}&dateTo={date_to}&isLive=false";
 
 const OUTCOMES_MAP: Record<number, [string, "over" | "under"]> = {
-  5688: ["points", "over"],
-  5689: ["points", "under"],
-  5690: ["assists", "over"],
-  5691: ["assists", "under"],
-  5692: ["rebounds", "over"],
-  5693: ["rebounds", "under"],
-  1082: ["three_pointers", "over"],
-  1083: ["three_pointers", "under"],
-  5700: ["tpra", "over"],
-  5701: ["tpra", "under"],
+  5688: ["points", "under"],
+  5689: ["points", "over"],
+  5690: ["assists", "under"],
+  5691: ["assists", "over"],
+  5692: ["rebounds", "under"],
+  5693: ["rebounds", "over"],
+  1082: ["three_pointers", "under"],
+  1083: ["three_pointers", "over"],
+  5700: ["tpra", "under"],
+  5701: ["tpra", "over"],
 };
 
 const TARGET_OVER_ODDS = 1.90;

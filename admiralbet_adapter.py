@@ -24,11 +24,11 @@ Odds & Markets:
     1604: "Ukupno poena+asistencija+skokova" -> "tpra"
 
   betTypeOutcomeId:
-    5688 / 5689 -> points over / under
-    5690 / 5691 -> assists over / under
-    5692 / 5693 -> rebounds over / under
-    1082 / 1083 -> three_pointers over / under
-    5700 / 5701 -> tpra over / under
+    5688 / 5689 -> points under / over
+    5690 / 5691 -> assists under / over
+    5692 / 5693 -> rebounds under / over
+    1082 / 1083 -> three_pointers under / over
+    5700 / 5701 -> tpra under / over
 
 Alternate line selection:
   When a player has multiple lines for a market (e.g. 18.5, 20.5, 22.5),
@@ -63,16 +63,16 @@ _EVENTS_URL_TEMPLATE = (
 
 # Outcome ID -> (market_name, side)
 _OUTCOMES_MAP: dict[int, tuple[str, str]] = {
-    5688: ("points", "over"),
-    5689: ("points", "under"),
-    5690: ("assists", "over"),
-    5691: ("assists", "under"),
-    5692: ("rebounds", "over"),
-    5693: ("rebounds", "under"),
-    1082: ("three_pointers", "over"),
-    1083: ("three_pointers", "under"),
-    5700: ("tpra", "over"),
-    5701: ("tpra", "under"),
+    5688: ("points", "under"),
+    5689: ("points", "over"),
+    5690: ("assists", "under"),
+    5691: ("assists", "over"),
+    5692: ("rebounds", "under"),
+    5693: ("rebounds", "over"),
+    1082: ("three_pointers", "under"),
+    1083: ("three_pointers", "over"),
+    5700: ("tpra", "under"),
+    5701: ("tpra", "over"),
 }
 
 _TARGET_OVER_ODDS = 1.90
