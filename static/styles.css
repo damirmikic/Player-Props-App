@@ -349,8 +349,26 @@ button, input {
   color: var(--color-muted);
 }
 
-#alertBooksChip {
+#alertBooksChip,
+#compareBooksChip {
   align-self: flex-start;
+}
+
+.alert-section-title {
+  margin: 4px 16px 8px;
+  font-size: 13px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-muted);
+}
+
+#compareList {
+  flex: none;
+}
+
+#compareList .empty-state {
+  padding: 16px;
 }
 
 .alert-threshold-row {
@@ -361,7 +379,8 @@ button, input {
   flex-shrink: 0;
 }
 
-#alertThreshold {
+#alertThreshold,
+#compareThreshold {
   width: 56px;
   border: none;
   background: transparent;
@@ -372,12 +391,15 @@ button, input {
   text-align: right;
 }
 
-#alertThreshold:focus {
+#alertThreshold:focus,
+#compareThreshold:focus {
   outline: none;
 }
 
 #alertThreshold::-webkit-inner-spin-button,
-#alertThreshold::-webkit-outer-spin-button {
+#alertThreshold::-webkit-outer-spin-button,
+#compareThreshold::-webkit-inner-spin-button,
+#compareThreshold::-webkit-outer-spin-button {
   -webkit-appearance: none;
   margin: 0;
 }
@@ -1126,7 +1148,12 @@ button, input {
     gap: 12px;
   }
 
-  #alertsList {
+  .alert-section-title {
+    margin: 16px 32px 0;
+  }
+
+  #alertsList,
+  #compareList {
     display: grid;
     align-items: start;
     grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));

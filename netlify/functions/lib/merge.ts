@@ -3,7 +3,7 @@
  * Movement-delta tracking (Blobs-backed) is handled separately in props.mts,
  * since it needs the Netlify Context for store access.
  */
-import { toCanonicalName, toCanonicalLeague } from "./name-utils.js";
+import { toCanonicalName, toCanonicalLeague, disambiguatePlayer } from "./name-utils.js";
 import type { PropRecord } from "./types.js";
 
 // Temporarily hidden markets — pull back out once ready to show them again.
@@ -28,6 +28,14 @@ export function mergeAndNormalize(allRecordsIn: PropRecord[]): MergedResult {
   // Re-normalize player names against the current alias table so that alias
   // changes take effect immediately without flushing adapter caches.
   allRecords = allRecords.map((r) => ({ ...r, player: toCanonicalName(r.player) }));
+
+  // Split canonical names shared by two different players (player-disambiguation.json),
+  // using team/game. Must run before the per-(league, player) game resolution below,
+  // otherwise both players get collapsed onto one game string.
+  allRecords = allRecords.map((r) => ({
+    ...r,
+    player: disambiguatePlayer(r.player, r.team, r.game),
+  }));
 
   // Re-normalize league names against league_aliases.json so that the same
   // competition appears under one canonical label regardless of which source

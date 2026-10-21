@@ -68,6 +68,20 @@
 
         <!-- Alerts panel -->
         <div class="panel" id="panel-alerts" hidden>
+          <h2 class="alert-section-title">Book gaps</h2>
+          <div class="alert-settings">
+            <div class="alert-settings-row">
+              <label for="compareThreshold">Flag line/odds gaps of at least</label>
+              <div class="alert-threshold-row">
+                <input type="number" id="compareThreshold" min="0" max="100" step="0.5" inputmode="decimal">
+                <span class="alert-threshold-suffix">%</span>
+              </div>
+            </div>
+            <button type="button" class="books-chip" id="compareBooksChip">Compare books &middot; <span id="compareBooksChipCount">0</span></button>
+          </div>
+          <div class="card-list" id="compareList"></div>
+
+          <h2 class="alert-section-title">Movement</h2>
           <div class="alert-settings">
             <div class="alert-settings-row">
               <label for="alertThreshold">Alert me on moves of at least</label>

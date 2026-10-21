@@ -13,6 +13,9 @@ const state = {
   alerts: loadAlerts(),
   alertThresholdPct: loadAlertThreshold(),
   alertBooks: loadAlertBooks(),
+  compareBooks: loadCompareBooks(),
+  compareThresholdPct: loadCompareThreshold(),
+  bookGaps: [],
   detailKey: null,
   detailMarket: null,
   highlightedBook: loadHighlightedBook(),
@@ -20,7 +23,8 @@ const state = {
 };
 
 // Which bookmaker sheet mode is currently open: "board" filters board cards,
-// "alerts" filters which books' movements are allowed to generate alerts.
+// "alerts" filters which books' movements are allowed to generate alerts,
+// "compare" picks the books whose lines/odds are compared against each other.
 let _bookSheetMode = "board";
 
 let _lastFetchedAt = null;
@@ -91,6 +95,31 @@ function saveAlertBooks() {
 
 function allowedForAlerts(bookmaker) {
   return state.alertBooks == null || state.alertBooks.has(bookmaker);
+}
+
+// Empty by default — book-gap comparison only runs once at least two books are picked.
+function loadCompareBooks() {
+  try {
+    const raw = localStorage.getItem("props_compare_books");
+    const parsed = raw ? JSON.parse(raw) : [];
+    return new Set(Array.isArray(parsed) ? parsed : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function saveCompareBooks() {
+  localStorage.setItem("props_compare_books", JSON.stringify([...state.compareBooks]));
+}
+
+function loadCompareThreshold() {
+  const raw = localStorage.getItem("props_compare_threshold_pct");
+  const value = raw != null ? Number(raw) : 5;
+  return Number.isFinite(value) && value >= 0 ? value : 5;
+}
+
+function saveCompareThreshold() {
+  localStorage.setItem("props_compare_threshold_pct", String(state.compareThresholdPct));
 }
 
 function loadHighlightedBook() {
@@ -233,6 +262,10 @@ const alertsList = document.querySelector("#alertsList");
 const alertThresholdInput = document.querySelector("#alertThreshold");
 const alertBooksChip = document.querySelector("#alertBooksChip");
 const alertBooksChipCount = document.querySelector("#alertBooksChipCount");
+const compareList = document.querySelector("#compareList");
+const compareThresholdInput = document.querySelector("#compareThreshold");
+const compareBooksChip = document.querySelector("#compareBooksChip");
+const compareBooksChipCount = document.querySelector("#compareBooksChipCount");
 const watchCountEl = document.querySelector("#watchCount");
 const alertCountEl = document.querySelector("#alertCount");
 
@@ -638,11 +671,105 @@ function collectMovementAlerts(records) {
   }
 }
 
+// ---------- book gaps (cross-book comparison) ----------
+
+function gapPct(low, high) {
+  if (!low || low <= 0) return null;
+  return ((high - low) / low) * 100;
+}
+
+// Compares the selected books against each other per league×player×market:
+// a line gap when their lines differ, and an odds gap when books quoting the
+// same line differ on over or under price. Odds on different lines aren't
+// comparable, so they're only checked within a single line.
+function computeBookGaps() {
+  if (state.compareBooks.size < 2) return [];
+  const threshold = state.compareThresholdPct;
+
+  const groups = new Map();
+  for (const r of state.records) {
+    if (!state.compareBooks.has(r.bookmaker) || !hasOdds(r)) continue;
+    const key = `${r.league}|${r.player}|${r.market}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(r);
+  }
+
+  const gaps = [];
+  for (const records of groups.values()) {
+    if (new Set(records.map((r) => r.bookmaker)).size < 2) continue;
+    const { league, player, market } = records[0];
+
+    const byLine = [...records].sort((a, b) => a.line - b.line);
+    const low = byLine[0];
+    const high = byLine[byLine.length - 1];
+    const linePct = gapPct(low.line, high.line);
+    if (linePct && linePct >= threshold) {
+      gaps.push({
+        league, player, market, pct: linePct,
+        detail: `Line ${low.bookmaker} ${low.line.toFixed(1)} vs ${high.bookmaker} ${high.line.toFixed(1)} (${linePct.toFixed(1)}%)`,
+      });
+    }
+
+    const lines = new Map();
+    for (const r of records) {
+      if (!lines.has(r.line)) lines.set(r.line, []);
+      lines.get(r.line).push(r);
+    }
+    for (const [line, sameLine] of lines) {
+      for (const [side, field] of [["Over", "over_odds_decimal"], ["Under", "under_odds_decimal"]]) {
+        const priced = sameLine.filter((r) => r[field] != null && r[field] > 0)
+          .sort((a, b) => a[field] - b[field]);
+        if (priced.length < 2) continue;
+        const lo = priced[0];
+        const hi = priced[priced.length - 1];
+        const pct = gapPct(lo[field], hi[field]);
+        if (pct && pct >= threshold) {
+          gaps.push({
+            league, player, market, pct,
+            detail: `Line ${line.toFixed(1)} · ${side} ${lo.bookmaker} ${formatOdds(lo[field])} vs ${hi.bookmaker} ${formatOdds(hi[field])} (${pct.toFixed(1)}%)`,
+          });
+        }
+      }
+    }
+  }
+
+  return gaps.sort((a, b) => b.pct - a.pct);
+}
+
+function refreshBookGaps() {
+  state.bookGaps = computeBookGaps();
+}
+
+function renderCompare() {
+  if (state.compareBooks.size < 2) {
+    compareList.innerHTML = `<div class="empty-state">Pick at least two bookmakers to compare.</div>`;
+    return;
+  }
+  if (state.bookGaps.length === 0) {
+    compareList.innerHTML = `<div class="empty-state">No gaps at or above ${state.compareThresholdPct}% between the selected books.</div>`;
+    return;
+  }
+
+  compareList.innerHTML = state.bookGaps.map((g) => `
+    <article class="alert-card" data-player="${escapeAttr(g.player)}" data-market="${escapeAttr(g.market)}">
+      <div class="alert-top">
+        <span>${g.player} &middot; ${marketTagHtml(g.market)}</span>
+        <span class="alert-time">${g.league}</span>
+      </div>
+      <p class="alert-detail">${g.detail}</p>
+    </article>
+  `).join("");
+}
+
+function renderCompareBooksChip() {
+  compareBooksChipCount.textContent = `${state.compareBooks.size}/${allBooks().length}`;
+}
+
 // ---------- tabs / counts ----------
 
 function renderCounts() {
   watchCountEl.textContent = state.watchlist.size ? `(${state.watchlist.size})` : "";
-  const visibleAlerts = state.alerts.filter((a) => allowedForAlerts(a.book)).length;
+  const visibleAlerts = state.alerts.filter((a) => allowedForAlerts(a.book)).length + state.bookGaps.length;
   alertCountEl.textContent = visibleAlerts ? `(${visibleAlerts})` : "";
 }
 
@@ -656,7 +783,10 @@ function setTab(tab) {
   panelAlerts.hidden = tab !== "alerts";
 
   if (tab === "watch") renderWatchlist();
-  if (tab === "alerts") renderAlerts();
+  if (tab === "alerts") {
+    renderCompare();
+    renderAlerts();
+  }
 }
 
 // ---------- detail screen ----------
@@ -745,12 +875,13 @@ function renderDetail() {
 function openBookSheet(mode) {
   _bookSheetMode = mode;
 
-  if (mode === "alerts") {
+  if (mode === "alerts" || mode === "compare") {
     const books = allBooks();
-    bookSheetTitle.textContent = "Alert Bookmakers";
+    const isChecked = mode === "alerts" ? allowedForAlerts : (book) => state.compareBooks.has(book);
+    bookSheetTitle.textContent = mode === "alerts" ? "Alert Bookmakers" : "Compare Bookmakers";
     bookSheetList.innerHTML = books.map((book) => `
       <label class="sheet-check-row">
-        <input type="checkbox" value="${escapeAttr(book)}" ${allowedForAlerts(book) ? "checked" : ""}>
+        <input type="checkbox" value="${escapeAttr(book)}" ${isChecked(book) ? "checked" : ""}>
         <span>${book}</span>
       </label>
     `).join("");
@@ -789,6 +920,13 @@ function closeBookSheet() {
     renderAlertBooksChip();
     renderCounts();
     renderAlerts();
+  } else if (_bookSheetMode === "compare") {
+    state.compareBooks = checked;
+    saveCompareBooks();
+    refreshBookGaps();
+    renderCompareBooksChip();
+    renderCounts();
+    renderCompare();
   } else {
     state.activeBooks = checked;
     renderMarketRow();
@@ -841,10 +979,15 @@ async function loadProps() {
     renderMatchSelect();
     renderMarketRow();
     renderBoard();
+    refreshBookGaps();
     renderCounts();
     renderAlertBooksChip();
+    renderCompareBooksChip();
     if (state.tab === "watch") renderWatchlist();
-    if (state.tab === "alerts") renderAlerts();
+    if (state.tab === "alerts") {
+      renderCompare();
+      renderAlerts();
+    }
     if (!screenDetail.hidden) renderDetail();
 
     if (_hasLoadedOnce) {
@@ -1097,6 +1240,12 @@ alertsList.addEventListener("click", (e) => {
   openDetail(card.dataset.player, card.dataset.market);
 });
 
+compareList.addEventListener("click", (e) => {
+  const card = e.target.closest(".alert-card");
+  if (!card) return;
+  openDetail(card.dataset.player, card.dataset.market);
+});
+
 backBtn.addEventListener("click", closeDetail);
 
 detailStar.addEventListener("click", () => {
@@ -1128,6 +1277,7 @@ bookSheetList.addEventListener("click", (e) => {
 
 booksChip.addEventListener("click", () => openBookSheet("board"));
 alertBooksChip.addEventListener("click", () => openBookSheet("alerts"));
+compareBooksChip.addEventListener("click", () => openBookSheet("compare"));
 scrim.addEventListener("click", closeBookSheet);
 booksDoneBtn.addEventListener("click", closeBookSheet);
 
@@ -1144,6 +1294,17 @@ alertThresholdInput.addEventListener("change", () => {
   state.alertThresholdPct = Number.isFinite(value) && value >= 0 ? value : 0;
   alertThresholdInput.value = state.alertThresholdPct;
   saveAlertThreshold();
+});
+
+compareThresholdInput.value = state.compareThresholdPct;
+compareThresholdInput.addEventListener("change", () => {
+  const value = Number(compareThresholdInput.value);
+  state.compareThresholdPct = Number.isFinite(value) && value >= 0 ? value : 0;
+  compareThresholdInput.value = state.compareThresholdPct;
+  saveCompareThreshold();
+  refreshBookGaps();
+  renderCounts();
+  renderCompare();
 });
 
 setInterval(updateStatusLine, 1000);

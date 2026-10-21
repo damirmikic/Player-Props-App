@@ -21,7 +21,7 @@ import mozzart_adapter
 import admiralbet_adapter
 import balkanbet_adapter
 from unabated_adapter import build_highlights
-from name_utils import to_canonical_name, to_canonical_league
+from name_utils import to_canonical_name, to_canonical_league, disambiguate_player
 
 
 ROOT = Path(__file__).resolve().parent
@@ -177,6 +177,14 @@ def load_all_props():
     # Re-normalize player names against the current alias table so that alias
     # changes take effect immediately without flushing adapter caches.
     all_records = [replace(r, player=to_canonical_name(r.player)) for r in all_records]
+
+    # Split canonical names shared by two different players (player_disambiguation.json),
+    # using team/game. Must run before the per-(league, player) game resolution below,
+    # otherwise both players get collapsed onto one game string.
+    all_records = [
+        replace(r, player=disambiguate_player(r.player, r.team, r.game))
+        for r in all_records
+    ]
 
     # Re-normalize league names against league_aliases.json so that the same
     # competition appears under one canonical label regardless of which source

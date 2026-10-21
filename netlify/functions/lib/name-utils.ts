@@ -11,6 +11,7 @@
  */
 import nameAliasesRaw from "./name-aliases.json" with { type: "json" };
 import leagueAliasesRaw from "./league-aliases.json" with { type: "json" };
+import disambiguationRaw from "./player-disambiguation.json" with { type: "json" };
 
 // Matches Merkur's "Last F." or "Last Abbr." format: one or more words, space, letter(s), period
 const CANONICAL_RE = /^(.+)\s+([A-Za-z]+)\.$/;
@@ -131,6 +132,45 @@ export function toCanonicalName(raw: string): string {
   }
 
   return name;
+}
+
+interface DisambiguationRule {
+  match: string[];
+  name: string;
+}
+
+const DISAMBIGUATION: Record<string, DisambiguationRule[]> = Object.fromEntries(
+  Object.entries(disambiguationRaw as Record<string, unknown>).filter(
+    ([k]) => !k.startsWith("_")
+  )
+) as Record<string, DisambiguationRule[]>;
+
+/**
+ * Split a canonical name shared by two different players (e.g. Keyonte and
+ * Kyshawn George are both "George K.") using the record's team or game.
+ *
+ * The team field is checked first. The game string names both sides, so a
+ * game match only counts when exactly one rule matches it — otherwise the
+ * two players' teams are facing each other and the name is left unchanged.
+ */
+export function disambiguatePlayer(player: string, team: string, game: string): string {
+  const rules = DISAMBIGUATION[player];
+  if (!rules) return player;
+
+  const matches = (rule: DisambiguationRule, text: string) => {
+    const lower = text.toLowerCase();
+    return rule.match.some((term) => lower.includes(term.toLowerCase()));
+  };
+
+  if (team) {
+    const hit = rules.find((rule) => matches(rule, team));
+    if (hit) return hit.name;
+  }
+  if (game) {
+    const hits = rules.filter((rule) => matches(rule, game));
+    if (hits.length === 1) return hits[0].name;
+  }
+  return player;
 }
 
 /**

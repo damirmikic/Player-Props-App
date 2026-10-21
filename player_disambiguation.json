@@ -1,0 +1,11 @@
+{
+  "_comment": "Splits canonical names shared by two different players. Keyed by canonical name; each rule's 'match' terms are checked (case-insensitive substring) against the record's team first, then its game string. First matching rule wins; no match leaves the name unchanged.",
+  "George K.": [
+    { "match": ["Utah", "Jazz"], "name": "George Ke." },
+    { "match": ["Washington", "Wizards"], "name": "George Ky." }
+  ],
+  "Mitchell D.": [
+    { "match": ["Cleveland", "Cavaliers"], "name": "Mitchell Do." },
+    { "match": ["Miami", "Heat"], "name": "Mitchell Da." }
+  ]
+}

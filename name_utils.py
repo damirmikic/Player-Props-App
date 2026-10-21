@@ -172,6 +172,54 @@ def to_canonical_name(raw: str) -> str:
     return name
 
 
+_DISAMBIG_FILE = Path(__file__).resolve().parent / "player_disambiguation.json"
+_disambig: dict | None = None
+_disambig_mtime: float = 0.0
+
+
+def _get_disambiguation() -> dict:
+    """Return the disambiguation table, reloading if player_disambiguation.json changed."""
+    global _disambig, _disambig_mtime
+    try:
+        mtime = _DISAMBIG_FILE.stat().st_mtime
+        if _disambig is None or mtime != _disambig_mtime:
+            data = json.loads(_DISAMBIG_FILE.read_text(encoding="utf-8"))
+            _disambig = {k: v for k, v in data.items() if not k.startswith("_")}
+            _disambig_mtime = mtime
+    except Exception:
+        if _disambig is None:
+            _disambig = {}
+    return _disambig
+
+
+def disambiguate_player(player: str, team: str, game: str) -> str:
+    """
+    Split a canonical name shared by two different players (e.g. Keyonte and
+    Kyshawn George are both "George K.") using the record's team or game.
+
+    The team field is checked first. The game string names both sides, so a
+    game match only counts when exactly one rule matches it — otherwise the
+    two players' teams are facing each other and the name is left unchanged.
+    """
+    rules = _get_disambiguation().get(player)
+    if not rules:
+        return player
+
+    def matches(rule: dict, text: str) -> bool:
+        text = text.lower()
+        return any(term.lower() in text for term in rule.get("match", []))
+
+    if team:
+        for rule in rules:
+            if matches(rule, team):
+                return rule["name"]
+    if game:
+        hits = [rule for rule in rules if matches(rule, game)]
+        if len(hits) == 1:
+            return hits[0]["name"]
+    return player
+
+
 def to_canonical_league(raw: str) -> str:
     """
     Map a source-specific league name to its canonical display label.
