@@ -142,6 +142,13 @@ function formatOdds(value) {
   return value === null || value === undefined ? "–" : Number(value).toFixed(2);
 }
 
+function hasOdds(record) {
+  if (!record) return false;
+  const hasOver = record.over_odds_decimal != null && !isNaN(Number(record.over_odds_decimal)) && Number(record.over_odds_decimal) > 0;
+  const hasUnder = record.under_odds_decimal != null && !isNaN(Number(record.under_odds_decimal)) && Number(record.under_odds_decimal) > 0;
+  return hasOver || hasUnder;
+}
+
 function groupKey(record) {
   return `${record.player}|${record.market}`;
 }
@@ -316,7 +323,7 @@ function setSortBy(value) {
 }
 
 function leagueBooks(league) {
-  return uniqueSorted(state.records.filter((r) => r.league === league).map((r) => r.bookmaker));
+  return uniqueSorted(state.records.filter((r) => r.league === league && hasOdds(r)).map((r) => r.bookmaker));
 }
 
 function allBooks() {
@@ -419,23 +426,17 @@ function filteredBoardRecords() {
     if (state.matchFilter !== "all" && r.game !== state.matchFilter) return false;
     if (state.marketFilter !== "all" && r.market !== state.marketFilter) return false;
     if (!state.activeBooks.has(r.bookmaker)) return false;
+    if (!hasOdds(r)) return false;
     if (!query) return true;
     return `${r.player} ${r.team}`.toLowerCase().includes(query);
   });
 }
 
 function bookCellHtml(book, record, consensus) {
+  if (!hasOdds(record)) return "";
+
   const isGolden = state.highlightedBook === book;
   const goldenClass = isGolden ? " golden" : "";
-
-  if (!record) {
-    return `
-      <div class="book-cell${goldenClass}">
-        <div class="book-cell-head">${book}</div>
-        <div class="pill-row"><span class="price-pill empty">–</span></div>
-      </div>
-    `;
-  }
 
   const overBest = isBestOver(record) ? " best" : "";
   const underBest = isBestUnder(record) ? " best" : "";
@@ -478,12 +479,17 @@ function propCardHtml(row) {
   const moved = Object.values(row.books).some(hasMovement);
   const key = watchKey(row.player, row.market);
   const isStarred = state.watchlist.has(key);
-  const books = [...state.activeBooks].filter((b) => row.books[b]).length
+  const candidateBooks = state.activeBooks.size > 0
     ? [...state.activeBooks]
     : Object.keys(row.books);
+  const books = candidateBooks.filter((book) => hasOdds(row.books[book]));
+
+  if (books.length === 0) return "";
 
   const consensus = consensusLine(row, books);
-  const cells = books.map((book) => bookCellHtml(book, row.books[book], consensus)).join("");
+  const cells = books.map((book) => bookCellHtml(book, row.books[book], consensus)).filter(Boolean).join("");
+  if (!cells) return "";
+
   const kickoff = formatKickoff(row.kickoff_time);
 
   return `
@@ -502,20 +508,17 @@ function propCardHtml(row) {
   `;
 }
 
-function escapeAttr(value) {
-  return String(value).replace(/"/g, "&quot;");
-}
-
 function renderBoard() {
   const rows = buildGroups(filteredBoardRecords());
   booksChipCount.textContent = state.activeBooks.size;
 
-  if (rows.length === 0) {
+  const cardsHtml = rows.map(propCardHtml).filter(Boolean).join("");
+  if (!cardsHtml) {
     boardList.innerHTML = `<div class="empty-state">No props match your filters.</div>`;
     return;
   }
 
-  boardList.innerHTML = rows.map(propCardHtml).join("");
+  boardList.innerHTML = cardsHtml;
 }
 
 // ---------- watchlist panel ----------
@@ -684,13 +687,13 @@ function renderDetail() {
     }
   }
 
-  const records = state.records.filter((r) => r.player === player && r.league === state.league);
+  const records = state.records.filter((r) => r.player === player && r.league === state.league && hasOdds(r));
   const markets = uniqueSorted(records.map((r) => r.market));
   if (!markets.includes(state.detailMarket) && markets.length > 0) {
     state.detailMarket = markets[0];
   }
 
-  const marketRecords = records.filter((r) => r.market === state.detailMarket);
+  const marketRecords = records.filter((r) => r.market === state.detailMarket && hasOdds(r));
   const game = marketRecords[0]?.game || "";
   const team = marketRecords[0]?.team || "";
 
