@@ -78,6 +78,8 @@ const APOSTROPHE_RE = /[`'’‘´ʼʻ]/g;
 
 export function toCanonicalName(raw: string): string {
   let name = raw.trim().replace(/\s+/g, " ").replace(APOSTROPHE_RE, "'");
+  // Mozzart typo: "M,Hammond" → "M.Hammond"
+  name = name.replace(/^([A-Za-z]+),(?=[A-Za-z])/, "$1.");
 
   if (!name || name === "Unknown Player") {
     return name;

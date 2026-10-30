@@ -25,7 +25,7 @@ import admiralbet_adapter
 import balkanbet_adapter
 from unabated_adapter import build_highlights
 from name_utils import (
-    to_canonical_name, to_canonical_league, to_canonical_game,
+    to_canonical_name, to_canonical_league, to_canonical_game, to_canonical_team,
     disambiguate_player, disambiguation_candidates,
 )
 
@@ -264,8 +264,12 @@ def load_all_props():
     def _resolve_partial_game(r):
         """Map a single-team label (e.g. "Crvena Zvezda") to the full
         "Away @ Home" fixture in the same league that contains that team,
-        preferring the one whose kickoff is closest to this record's."""
+        preferring the one whose kickoff is closest to this record's.
+        A blank label falls back to the record's own team field (MaxBet /
+        AdmiralBet players whose kickoff slot had no opponent to pair with)."""
         team = re.sub(r'^(vs\.?|@)\s+', '', r.game, flags=re.I)
+        if not team and r.team:
+            team = to_canonical_team(r.team, r.league)
         if not team:
             return None
         candidates = [g for lg, g in full_games if lg == r.league and team in g]

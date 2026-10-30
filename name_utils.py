@@ -138,6 +138,8 @@ def to_canonical_name(raw: str) -> str:
     7. Fallback — returned as-is
     """
     name = _APOSTROPHE_RE.sub("'", re.sub(r"\s+", " ", raw.strip()))
+    # Mozzart typo: "M,Hammond" → "M.Hammond"
+    name = re.sub(r'^([A-Za-z]+),(?=[A-Za-z])', r'\1.', name)
 
     if not name or name == "Unknown Player":
         return name

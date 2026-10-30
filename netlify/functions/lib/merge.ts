@@ -7,6 +7,7 @@ import {
   toCanonicalName,
   toCanonicalLeague,
   toCanonicalGame,
+  toCanonicalTeam,
   disambiguatePlayer,
   disambiguationCandidates,
 } from "./name-utils.js";
@@ -130,7 +131,10 @@ export function mergeAndNormalize(allRecordsIn: PropRecord[]): MergedResult {
   // fixture in the same league that contains that team, preferring the one
   // whose kickoff is closest to this record's.
   const resolvePartialGame = (r: PropRecord): string | null => {
-    const team = r.game.replace(/^(vs\.?|@)\s+/i, "");
+    // A blank label falls back to the record's own team field (MaxBet /
+    // AdmiralBet players whose kickoff slot had no opponent to pair with).
+    let team = r.game.replace(/^(vs\.?|@)\s+/i, "");
+    if (!team && r.team) team = toCanonicalTeam(r.team, r.league);
     if (!team) return null;
     const candidates = [...fullGames.values()]
       .filter((g) => g.league === r.league && g.game.includes(team));

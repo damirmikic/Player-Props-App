@@ -54,6 +54,10 @@
     "Seattle": "Seattle Storm",
     "Washington": "Washington Mystics"
   },
+  "ABA Liga": {
+    "Bosna S.": "KK Bosna",
+    "Bosna": "KK Bosna"
+  },
   "Euroleague": {
     "Crvena zvezda": "Crvena Zvezda",
     "Bayern": "Bayern Munich",
@@ -76,6 +80,9 @@
     "Fenerbahce Beko": "Fenerbahce",
     "Paris Basketball": "Paris",
     "LDLC ASVEL": "ASVEL",
+    "Lyon-Villeurbanne": "ASVEL",
+    "Lyon-Villeurb.": "ASVEL",
+    "Lyon Villeurbanne": "ASVEL",
     "Panathinaikos AKTOR": "Panathinaikos",
     "Partizan Mozzart Bet": "Partizan",
     "Zalgiris Kaunas": "Zalgiris",
