@@ -25,12 +25,14 @@ from pathlib import Path
 
 _ALIAS_FILE        = Path(__file__).resolve().parent / "name_aliases.json"
 _LEAGUE_ALIAS_FILE = Path(__file__).resolve().parent / "league_aliases.json"
+_TEAM_ALIAS_FILE   = Path(__file__).resolve().parent / "team_aliases.json"
 
 # Matches Merkur's "Last F." or "Last Abbr." format: one or more words, space, letter(s), period
 _CANONICAL_RE = re.compile(r'^(.+)\s+([A-Za-z]+)\.$')
 
 # Matches Mozzart's "F.Last" or "Abbr.Last" format: letters, period, no space, surname
-_INITIAL_DOT_LAST_RE = re.compile(r'^([A-Za-z]+)\.([A-Za-z\-\']+)$')
+# (multiple initials allowed, e.g. "C.J.McCollum")
+_INITIAL_DOT_LAST_RE = re.compile(r'^((?:[A-Za-z]+\.)+)([A-Za-z\-\']+)$')
 
 _DIACRITICS_TABLE = {
     'Đ': 'Dj', 'đ': 'dj',
@@ -51,6 +53,9 @@ _alias_mtime: float = 0.0
 
 _league_aliases: dict | None = None
 _league_alias_mtime: float = 0.0
+
+_team_aliases: dict | None = None
+_team_alias_mtime: float = 0.0
 
 
 def load_aliases() -> dict:
@@ -94,6 +99,25 @@ def _get_league_aliases() -> dict:
         if _league_aliases is None:
             _league_aliases = {}
     return _league_aliases
+
+
+def _get_team_aliases() -> dict:
+    """Return {league: {lowercased raw name: canonical}}, reloading if team_aliases.json changed."""
+    global _team_aliases, _team_alias_mtime
+    try:
+        mtime = _TEAM_ALIAS_FILE.stat().st_mtime
+        if _team_aliases is None or mtime != _team_alias_mtime:
+            data = json.loads(_TEAM_ALIAS_FILE.read_text(encoding="utf-8"))
+            _team_aliases = {
+                league: {k.lower(): v for k, v in table.items()}
+                for league, table in data.items()
+                if not league.startswith("_") and isinstance(table, dict)
+            }
+            _team_alias_mtime = mtime
+    except Exception:
+        if _team_aliases is None:
+            _team_aliases = {}
+    return _team_aliases
 
 
 _APOSTROPHE_RE = re.compile(r"[`'’‘´ʼʻ]")
@@ -151,6 +175,10 @@ def to_canonical_name(raw: str) -> str:
     if len(parts) >= 2 and parts[-1].rstrip(".").upper() in ("JR", "SR", "II", "III", "IV"):
         suffix = parts[-1].rstrip(".").upper()
         main = parts[:-1]
+        # Already "Last F." with a trailing suffix (MaxBet/AdmiralBet "Acuff D. JR"):
+        # drop the suffix to match Unabated's suffix-less "Acuff D.".
+        if len(main) == 2 and re.fullmatch(r"[A-Za-z]+\.", main[1]):
+            return f"{main[0]} {main[1][0].upper()}."
         if len(main) >= 2:
             last = main[-1]
             first_initial = main[0][0].upper()
@@ -190,6 +218,11 @@ def _get_disambiguation() -> dict:
         if _disambig is None:
             _disambig = {}
     return _disambig
+
+
+def disambiguation_candidates(player: str) -> list[str]:
+    """Names an ambiguous canonical name can split into ([] if not ambiguous)."""
+    return [rule["name"] for rule in _get_disambiguation().get(player) or [] if rule.get("name")]
 
 
 def disambiguate_player(player: str, team: str, game: str) -> str:
@@ -262,3 +295,47 @@ def to_canonical_league(raw: str) -> str:
                 return v
 
     return name
+
+
+def to_canonical_team(raw: str, league: str) -> str:
+    """
+    Map a source-specific team name to its canonical form for `league`
+    (a canonical league label), via team_aliases.json (hot-reloaded).
+
+    A trailing " W" / " M" gender marker is stripped first. Unknown names are
+    returned (marker-stripped) unchanged.
+
+    >>> to_canonical_team("Maccabi T.A.", "Euroleague")
+    'Maccabi Tel Aviv'
+    >>> to_canonical_team("Atlanta W", "WNBA")
+    'Atlanta Dream'
+    """
+    name = re.sub(r'\s+[WM]$', '', raw.strip())
+    if not name:
+        return name
+    aliases = _get_team_aliases()
+    key = name.lower()
+    for table in (aliases.get(league, {}), aliases.get("*", {})):
+        if key in table:
+            return table[key]
+    return name
+
+
+def to_canonical_game(game: str, league: str) -> str:
+    """
+    Canonicalize each team in a game label: "Away @ Home" (both sides), or a
+    single-team label with an optional "vs " / "@ " prefix (prefix kept).
+
+    >>> to_canonical_game("Memphis @ Portland", "NBA")
+    'Memphis Grizzlies @ Portland Trail Blazers'
+    >>> to_canonical_game("vs Bayern", "Euroleague")
+    'vs Bayern Munich'
+    """
+    if not game:
+        return game
+    if " @ " in game:
+        return " @ ".join(to_canonical_team(side, league) for side in game.split(" @ ", 1))
+    m = re.match(r'(?i)^((?:vs\.?|@)\s+)(.*)$', game)
+    if m:
+        return m.group(1) + to_canonical_team(m.group(2), league)
+    return to_canonical_team(game, league)

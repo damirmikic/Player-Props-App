@@ -6,18 +6,20 @@
  * Unlike the Python version, alias files here are bundled at deploy time
  * (imported as static JSON) rather than hot-reloaded by mtime — each
  * function invocation is a fresh process anyway, so there is no persistent
- * state to go stale. Editing name-aliases.json / league-aliases.json
+ * state to go stale. Editing name-aliases.json / league-aliases.json / team-aliases.json
  * requires a redeploy.
  */
 import nameAliasesRaw from "./name-aliases.json" with { type: "json" };
 import leagueAliasesRaw from "./league-aliases.json" with { type: "json" };
+import teamAliasesRaw from "./team-aliases.json" with { type: "json" };
 import disambiguationRaw from "./player-disambiguation.json" with { type: "json" };
 
 // Matches Merkur's "Last F." or "Last Abbr." format: one or more words, space, letter(s), period
 const CANONICAL_RE = /^(.+)\s+([A-Za-z]+)\.$/;
 
 // Matches Mozzart's "F.Last" or "Abbr.Last" format: letters, period, no space, surname
-const INITIAL_DOT_LAST_RE = /^([A-Za-z]+)\.([A-Za-z\-']+)$/;
+// (multiple initials allowed, e.g. "C.J.McCollum")
+const INITIAL_DOT_LAST_RE = /^((?:[A-Za-z]+\.)+)([A-Za-z\-']+)$/;
 
 const DIACRITICS_MAP: Record<string, string> = {
   Đ: "Dj",
@@ -46,6 +48,18 @@ const LEAGUE_ALIASES: Record<string, string> = Object.fromEntries(
   Object.entries(leagueAliasesRaw as Record<string, string>).filter(
     ([k]) => !k.startsWith("_")
   )
+);
+
+// {league: {lowercased raw name: canonical}}; "*" applies to every league.
+const TEAM_ALIASES: Record<string, Record<string, string>> = Object.fromEntries(
+  Object.entries(teamAliasesRaw as Record<string, unknown>)
+    .filter(([k, v]) => !k.startsWith("_") && v !== null && typeof v === "object")
+    .map(([league, table]) => [
+      league,
+      Object.fromEntries(
+        Object.entries(table as Record<string, string>).map(([k, v]) => [k.toLowerCase(), v])
+      ),
+    ])
 );
 
 /**
@@ -105,6 +119,11 @@ export function toCanonicalName(raw: string): string {
     if (["JR", "SR", "II", "III", "IV"].includes(lastPart)) {
       const suffix = parts[parts.length - 1].replace(/\.+$/, "");
       const main = parts.slice(0, -1);
+      // Already "Last F." with a trailing suffix (MaxBet/AdmiralBet "Acuff D. JR"):
+      // drop the suffix to match Unabated's suffix-less "Acuff D.".
+      if (main.length === 2 && /^[A-Za-z]+\.$/.test(main[1])) {
+        return `${main[0]} ${main[1][0].toUpperCase()}.`;
+      }
       let last = "";
       let firstInitial = "";
       if (main.length >= 2) {
@@ -153,6 +172,11 @@ const DISAMBIGUATION: Record<string, DisambiguationRule[]> = Object.fromEntries(
  * game match only counts when exactly one rule matches it — otherwise the
  * two players' teams are facing each other and the name is left unchanged.
  */
+/** Names an ambiguous canonical name can split into ([] if not ambiguous). */
+export function disambiguationCandidates(player: string): string[] {
+  return (DISAMBIGUATION[player] ?? []).map((rule) => rule.name).filter(Boolean);
+}
+
 export function disambiguatePlayer(player: string, team: string, game: string): string {
   const rules = DISAMBIGUATION[player];
   if (!rules) return player;
@@ -213,4 +237,35 @@ export function toCanonicalLeague(raw: string): string {
   }
 
   return name;
+}
+
+/**
+ * Map a source-specific team name to its canonical form for `league`
+ * (a canonical league label), via team-aliases.json. A trailing " W" / " M"
+ * gender marker is stripped first. Unknown names are returned
+ * (marker-stripped) unchanged.
+ */
+export function toCanonicalTeam(raw: string, league: string): string {
+  const name = raw.trim().replace(/\s+[WM]$/, "");
+  if (!name) return name;
+  const key = name.toLowerCase();
+  for (const table of [TEAM_ALIASES[league] ?? {}, TEAM_ALIASES["*"] ?? {}]) {
+    if (table[key]) return table[key];
+  }
+  return name;
+}
+
+/**
+ * Canonicalize each team in a game label: "Away @ Home" (both sides), or a
+ * single-team label with an optional "vs " / "@ " prefix (prefix kept).
+ */
+export function toCanonicalGame(game: string, league: string): string {
+  if (!game) return game;
+  const at = game.indexOf(" @ ");
+  if (at !== -1) {
+    return `${toCanonicalTeam(game.slice(0, at), league)} @ ${toCanonicalTeam(game.slice(at + 3), league)}`;
+  }
+  const m = game.match(/^((?:vs\.?|@)\s+)(.*)$/i);
+  if (m) return m[1] + toCanonicalTeam(m[2], league);
+  return toCanonicalTeam(game, league);
 }

@@ -139,6 +139,7 @@ def parse_unabated_props(raw):
     people = raw.get("people", {})
     teams = raw.get("teams", {})
     sources = {str(source.get("id")): source for source in raw.get("marketSources", [])}
+    event_games = build_event_games(teams)
     records = []
 
     for odds_key, rows in raw.get("odds", {}).items():
@@ -164,7 +165,7 @@ def parse_unabated_props(raw):
 
             player = player_name(people.get(str(row.get("personId")), {}))
             team = teams.get(str(row.get("teamId")), {})
-            game = clean_event_name(row.get("eventName"), row.get("eventId"))
+            game = event_games.get(row.get("eventId")) or clean_event_name(row.get("eventName"), row.get("eventId"))
             book_prices = collect_book_prices(row.get("sides") or {}, sources)
 
             for book_id, price in book_prices.items():
@@ -255,6 +256,25 @@ def player_name(person):
     if not full:
         return "Unknown Player"
     return to_canonical_name(full)
+
+
+def build_event_games(teams):
+    """Build "Away @ Home" from the teams table (sideId 0 = away, 1 = home).
+
+    Unabated's eventName uses a "Nickname City ABBR" form (e.g. "Cavaliers
+    Cleveland CLE") that no other source matches; the team `name` field is the
+    plain "Cleveland Cavaliers" form the other books use.
+    """
+    sides = {}
+    for team in teams.values():
+        event_id, side_id, name = team.get("eventId"), team.get("sideId"), team.get("name")
+        if event_id is not None and side_id in (0, 1) and name:
+            sides.setdefault(event_id, {})[side_id] = name.strip()
+    return {
+        event_id: f"{s[0]} @ {s[1]}"
+        for event_id, s in sides.items()
+        if 0 in s and 1 in s
+    }
 
 
 def clean_event_name(event_name, event_id):

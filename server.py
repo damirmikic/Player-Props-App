@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+
 from dataclasses import asdict, replace
 from datetime import datetime, timezone
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
@@ -21,7 +24,10 @@ import mozzart_adapter
 import admiralbet_adapter
 import balkanbet_adapter
 from unabated_adapter import build_highlights
-from name_utils import to_canonical_name, to_canonical_league, disambiguate_player
+from name_utils import (
+    to_canonical_name, to_canonical_league, to_canonical_game,
+    disambiguate_player, disambiguation_candidates,
+)
 
 
 ROOT = Path(__file__).resolve().parent
@@ -32,6 +38,10 @@ _prev_snapshot: dict = {}
 _snapshot_lock = threading.Lock()
 
 # ---- News feed cache -------------------------------------------------------
+# Books whose "Away @ Home" is reconstructed by pairing teams on a kickoff
+# slot, so the order is not a real home/away signal.
+_UNORDERED_GAME_BOOKS = {"MaxBet", "AdmiralBet"}
+
 _NEWS_FEED_URL = "https://rss.app/feeds/v1.1/5Wdnismo41isPtyA.json"
 _NEWS_TTL_SECONDS = 300  # 5 minuta
 
@@ -191,6 +201,15 @@ def load_all_props():
     # named it (e.g. "Kvalifikacije SP" and "World Ch. Qual." → "FIBA Qualifiers").
     all_records = [replace(r, league=to_canonical_league(r.league)) for r in all_records]
 
+    # Records still carrying an ambiguous name (no team/game to split on, e.g.
+    # Mozzart's bare "Mitchell D.") take the one variant actually present in
+    # that league today, if exactly one is.
+    present = {(r.league, r.player) for r in all_records}
+    def _settle_ambiguous(r):
+        hits = [c for c in disambiguation_candidates(r.player) if (r.league, c) in present]
+        return replace(r, player=hits[0]) if len(hits) == 1 else r
+    all_records = [_settle_ambiguous(r) for r in all_records]
+
     # Strip gender markers (e.g. "(W)", "(M)") from all game strings so that
     # "Washington Mystics (W) @ Minnesota Lynx (W)" and
     # "Washington Mystics @ Minnesota Lynx" resolve to the same event.
@@ -199,10 +218,79 @@ def load_all_props():
         for r in all_records
     ]
 
+    # Canonicalize team names inside game strings via team_aliases.json, so
+    # "Memphis @ Portland" (MaxBet) and "Memphis Grizzlies @ Portland Trail
+    # Blazers" (Unabated) resolve to the same event.
+    all_records = [
+        replace(r, game=to_canonical_game(r.game, r.league))
+        for r in all_records
+    ]
+
+    # Collapse "A @ B" / "B @ A" into one fixture. MaxBet and AdmiralBet build
+    # matchups by pairing two teams on the same kickoff slot, so their
+    # home/away order is arbitrary; take the order from books that report it.
+    votes = {}
+    for r in all_records:
+        if " @ " not in r.game:
+            continue
+        sides = frozenset(r.game.split(" @ ", 1))
+        weight = 0 if r.bookmaker in _UNORDERED_GAME_BOOKS else 1
+        books = votes.setdefault((r.league, sides), {}).setdefault(r.game, [set(), 0])
+        books[0].add(r.bookmaker)
+        books[1] += weight
+    oriented = {}
+    for key, by_game in votes.items():
+        if len(by_game) > 1:
+            best = max(by_game, key=lambda g: (by_game[g][1] > 0, len(by_game[g][0]), by_game[g][1]))
+            for g in by_game:
+                oriented[(key[0], g)] = best
+    if oriented:
+        all_records = [
+            replace(r, game=oriented[(r.league, r.game)]) if (r.league, r.game) in oriented else r
+            for r in all_records
+        ]
+
     # Normalize event names and kickoff times across all sources
     # 1. Collect full game strings that contain " @ "
-    full_games = {r.game for r in all_records if " @ " in r.game}
+    full_games = {(r.league, r.game) for r in all_records if " @ " in r.game}
     game_to_kickoff = {r.game: r.kickoff_time for r in all_records if r.kickoff_time}
+
+    def _parse_ts(ts):
+        try:
+            return datetime.fromisoformat(ts.replace("Z", "+00:00")).timestamp()
+        except (AttributeError, ValueError):
+            return None
+
+    def _resolve_partial_game(r):
+        """Map a single-team label (e.g. "Crvena Zvezda") to the full
+        "Away @ Home" fixture in the same league that contains that team,
+        preferring the one whose kickoff is closest to this record's."""
+        team = re.sub(r'^(vs\.?|@)\s+', '', r.game, flags=re.I)
+        if not team:
+            return None
+        candidates = [g for lg, g in full_games if lg == r.league and team in g]
+        if len(candidates) <= 1:
+            return candidates[0] if candidates else None
+        own_ts = _parse_ts(r.kickoff_time)
+        if own_ts is None:
+            return None
+        timed = []
+        for g in candidates:
+            ts = _parse_ts(game_to_kickoff.get(g, ""))
+            if ts is not None and abs(ts - own_ts) <= 6 * 3600:
+                timed.append((abs(ts - own_ts), -len(g), g))
+        # Same kickoff → spelling variants of one fixture; prefer the longest,
+        # matching the per-player "longest wins" rule below.
+        timed.sort()
+        return timed[0][2] if timed else None
+
+    # Expand single-team labels before the per-player pass, so a player who
+    # only has partial labels elsewhere (Merkur "Atlanta", BalkanBet
+    # "vs Atlanta") still lends a full game to blank-labelled records (Mozzart).
+    all_records = [
+        replace(r, game=_resolve_partial_game(r) or r.game) if " @ " not in r.game else r
+        for r in all_records
+    ]
 
     # 2. Map (league, player) -> best game string
     player_to_game = {}
@@ -222,16 +310,6 @@ def load_all_props():
     normalized_records = []
     for r in all_records:
         best_game = player_to_game.get((r.league, r.player))
-        
-        # If best_game has no " @ ", maybe it's a partial string.
-        # Try substring resolution against full_games.
-        if not best_game or " @ " not in best_game:
-            matches = [g for g in full_games if r.game in g]
-            if len(matches) == 1:
-                best_game = matches[0]
-            else:
-                best_game = r.game
-        
         new_game = best_game if best_game else r.game
         new_kickoff = game_to_kickoff.get(new_game, r.kickoff_time)
         

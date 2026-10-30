@@ -132,6 +132,27 @@ function playerName(person: any): string {
   return toCanonicalName(full);
 }
 
+/**
+ * Build "Away @ Home" from the teams table (sideId 0 = away, 1 = home).
+ * Unabated's eventName uses a "Nickname City ABBR" form (e.g. "Cavaliers
+ * Cleveland CLE") that no other source matches; the team `name` field is the
+ * plain "Cleveland Cavaliers" form the other books use.
+ */
+function buildEventGames(teams: Record<string, any>): Map<any, string> {
+  const sides = new Map<any, Record<number, string>>();
+  for (const team of Object.values(teams)) {
+    const { eventId, sideId, name } = team ?? {};
+    if (eventId == null || (sideId !== 0 && sideId !== 1) || !name) continue;
+    if (!sides.has(eventId)) sides.set(eventId, {});
+    sides.get(eventId)![sideId] = String(name).trim();
+  }
+  const games = new Map<any, string>();
+  for (const [eventId, s] of sides) {
+    if (s[0] && s[1]) games.set(eventId, `${s[0]} @ ${s[1]}`);
+  }
+  return games;
+}
+
 function cleanEventName(eventName: string | undefined, eventId: any): string {
   if (!eventName) return `Event ${eventId}`;
   return eventName.replace(" - @ ", " @ ").replace(/^-+|-+$/g, "").trim();
@@ -186,6 +207,7 @@ export function parseUnabatedProps(raw: any): PropRecord[] {
     sources[String(source.id)] = source;
   }
 
+  const eventGames = buildEventGames(teams);
   const records: PropRecord[] = [];
 
   for (const [oddsKey, rows] of Object.entries(raw.odds ?? {})) {
@@ -207,7 +229,7 @@ export function parseUnabatedProps(raw: any): PropRecord[] {
 
       const player = playerName(people[String(row.personId)] ?? {});
       const team = teams[String(row.teamId)] ?? {};
-      const game = cleanEventName(row.eventName, row.eventId);
+      const game = eventGames.get(row.eventId) ?? cleanEventName(row.eventName, row.eventId);
       const bookPrices = collectBookPrices(row.sides ?? {}, sources);
 
       for (const [bookId, price] of Object.entries(bookPrices)) {
