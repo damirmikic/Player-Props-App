@@ -7,6 +7,7 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 import json
 import mimetypes
+import os
 import re
 import threading
 import time
@@ -104,8 +105,8 @@ def _compute_deltas(records: list, prev: dict) -> dict:
 
 
 STATIC_ROOT = ROOT / "static"
-HOST = "127.0.0.1"
-PORT = 8000
+HOST = os.environ.get("HOST", "127.0.0.1")
+PORT = int(os.environ.get("PORT", "8000"))
 
 
 def load_all_props():
