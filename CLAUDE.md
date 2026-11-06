@@ -113,6 +113,10 @@ updated_at: str          # ISO timestamp of data fetch
 
 Movement deltas (`line_delta`, `over_odds_delta`, `under_odds_delta`) are added as plain dict keys in `server.py`/`movement.ts` before serialization — they are not on the dataclass/interface itself. Highlight flags are not per-record at all; they live in a separate top-level `highlights` map (see Frontend section above).
 
+## Opening/Closing Line History (Python only, for now)
+
+`line_history.py` stores one SQLite row per (league, player, market, bookmaker, kickoff date) in `line_history.db` (gitignored; override with `LINE_HISTORY_DB`). `load_all_props()` upserts every merged record: first sighting fixes `open_*`, later sightings overwrite `close_*`. Because tipped-off games are dropped before recording, `close_*` freezes at the last sighting pre-kickoff. A daemon thread in `server.py` (`_collector_loop`, started in `main()`) calls `load_all_props(track_movement=False)` every 600 s (120 s when a game starts within 45 min) so history doesn't depend on user traffic; tune with `COLLECT_INTERVAL_SECONDS` / `COLLECT_FAST_INTERVAL_SECONDS`, disable with `COLLECT_LINES=0`. `GET /api/line-history?league=&player=&market=&limit=` returns rows with `line_move`/`over_move`/`under_move`. Caveat: Stoiximan's selected threshold can flip, which shows up as a fake line move. The TS/Netlify port has no equivalent yet.
+
 ## Cache Files
 
 `merkur_cache.json`, `superbet_cache.json`, `stoiximan_cache.json`, `maxbet_cache.json`, `admiralbet_cache.json`, and `unabated_*.json` files in the root are runtime artifacts for the Python backend — they are gitignored. Delete them to force a cold fetch. Mozzart is never cached to disk. The cross-request movement-detection snapshot in `server.py` lives only in memory and resets on server restart.
