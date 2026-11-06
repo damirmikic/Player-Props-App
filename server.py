@@ -15,6 +15,7 @@ import urllib.parse
 import urllib.request
 
 import news_utils
+import line_history
 
 import unabated_adapter
 import merkur_adapter
@@ -109,7 +110,7 @@ HOST = os.environ.get("HOST", "127.0.0.1")
 PORT = int(os.environ.get("PORT", "8000"))
 
 
-def load_all_props():
+def load_all_props(track_movement: bool = True):
     """
     Fetch and merge player props from all configured sources.
 
@@ -334,20 +335,30 @@ def load_all_props():
     # All distinct markets across all leagues / sources
     all_markets = sorted({r.market for r in all_records})
 
+    # --- Opening/closing line history (never blocks the response) ---
+    try:
+        line_history.record_snapshot(all_records)
+    except Exception as exc:
+        print(f"line_history: failed to record snapshot: {exc}")
+
     # --- Movement detection ---
-    with _snapshot_lock:
-        prev = dict(_prev_snapshot)
+    # The background collector passes track_movement=False so it doesn't
+    # reset the baseline users' deltas are computed against.
+    movements = {}
+    if track_movement:
+        with _snapshot_lock:
+            prev = dict(_prev_snapshot)
 
-    movements = _compute_deltas(all_records, prev)
+        movements = _compute_deltas(all_records, prev)
 
-    with _snapshot_lock:
-        _prev_snapshot.clear()
-        for r in all_records:
-            _prev_snapshot[_snapshot_key(r)] = {
-                "line":               r.line,
-                "over_odds_decimal":  r.over_odds_decimal,
-                "under_odds_decimal": r.under_odds_decimal,
-            }
+        with _snapshot_lock:
+            _prev_snapshot.clear()
+            for r in all_records:
+                _prev_snapshot[_snapshot_key(r)] = {
+                    "line":               r.line,
+                    "over_odds_decimal":  r.over_odds_decimal,
+                    "under_odds_decimal": r.under_odds_decimal,
+                }
 
     def _record_dict(r):
         d = asdict(r)
@@ -450,6 +461,20 @@ class AppHandler(SimpleHTTPRequestHandler):
             self.send_json(payload)
             return
 
+        if parsed.path == "/api/line-history":
+            qs = urllib.parse.parse_qs(parsed.query)
+
+            def _q(k):
+                return (qs.get(k) or [None])[0]
+
+            try:
+                limit = int(_q("limit") or 500)
+            except ValueError:
+                limit = 500
+            rows = line_history.query_history(_q("league"), _q("player"), _q("market"), limit)
+            self.send_json({"rows": rows})
+            return
+
         if parsed.path == "/api/news":
             payload = load_news()
             self.send_json(payload)
@@ -494,7 +519,41 @@ class AppHandler(SimpleHTTPRequestHandler):
         pass
 
 
+# ---- Background collector for opening/closing lines ------------------------
+# Polls independently of user traffic so "open" is close to the real opening
+# and "close" is fresh just before tip-off. Polls faster when a game is near.
+_COLLECT_SLOW = int(os.environ.get("COLLECT_INTERVAL_SECONDS", "600"))
+_COLLECT_FAST = int(os.environ.get("COLLECT_FAST_INTERVAL_SECONDS", "120"))
+_COLLECT_NEAR_MIN = 45  # "near kickoff" window, minutes
+
+
+def _collector_loop():
+    while True:
+        delay = _COLLECT_SLOW
+        try:
+            payload = load_all_props(track_movement=False)
+            now = datetime.now(timezone.utc)
+            for rec in payload["records"]:
+                kt = rec.get("kickoff_time")
+                if not kt:
+                    continue
+                try:
+                    k = datetime.fromisoformat(kt.replace("Z", "+00:00"))
+                except ValueError:
+                    continue
+                if k.tzinfo is None:
+                    k = k.replace(tzinfo=timezone.utc)
+                if 0 <= (k - now).total_seconds() <= _COLLECT_NEAR_MIN * 60:
+                    delay = _COLLECT_FAST
+                    break
+        except Exception as exc:
+            print(f"collector: {exc}")
+        time.sleep(delay)
+
+
 def main():
+    if os.environ.get("COLLECT_LINES", "1") != "0":
+        threading.Thread(target=_collector_loop, daemon=True, name="line-collector").start()
     server = ThreadingHTTPServer((HOST, PORT), AppHandler)
     print(f"Serving Player Props App at http://{HOST}:{PORT}")
     server.serve_forever()

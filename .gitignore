@@ -9,3 +9,4 @@ deno.lock
 
 # Node
 node_modules/
+line_history.db*
