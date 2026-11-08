@@ -30,6 +30,7 @@ let _bookSheetMode = "board";
 let _lastFetchedAt = null;
 let _lastStatusPrefix = "Loading…";
 let _pollTimer = null;
+let _loadingProps = false;
 let _hasLoadedOnce = false;
 
 const STAR_OUTLINE = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>';
@@ -953,9 +954,11 @@ function updateStatusLine() {
 }
 
 async function loadProps() {
+  if (_loadingProps) return;
+  _loadingProps = true;
   clearTimeout(_pollTimer);
   try {
-    const response = await fetch("/api/props");
+    const response = await fetch("/api/props", { cache: "no-store" });
     if (!response.ok) throw new Error(`API returned ${response.status}`);
     const payload = await response.json();
 
@@ -1001,9 +1004,23 @@ async function loadProps() {
     statusEl.textContent = "Unable to refresh";
     console.error(error);
   } finally {
+    _loadingProps = false;
     _pollTimer = setTimeout(loadProps, 30_000);
   }
 }
+
+// Background tabs throttle/suspend timers (especially on phones), so odds go
+// stale while the tab is hidden. Refetch as soon as the page is visible again.
+const STALE_AFTER_MS = 15_000;
+function refreshIfStale() {
+  if (document.hidden) return;
+  if (!_lastFetchedAt || Date.now() - _lastFetchedAt > STALE_AFTER_MS) loadProps();
+}
+document.addEventListener("visibilitychange", refreshIfStale);
+window.addEventListener("focus", refreshIfStale);
+window.addEventListener("online", refreshIfStale);
+// Page restored from the back/forward cache keeps old JS state.
+window.addEventListener("pageshow", (e) => { if (e.persisted) loadProps(); });
 
 // ---------- news ticker ----------
 
